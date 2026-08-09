@@ -30,6 +30,13 @@ def train(config: dict) -> CorrectionHead:
         donor_col=ref_cfg.get("donor_col"),
     )
     loader = DataLoader(dataset, batch_size=train_cfg["batch_size"], shuffle=True, drop_last=True)
+    if len(loader) == 0:
+        raise ValueError(
+            f"reference panel has {len(dataset)} cells but batch_size={train_cfg['batch_size']} "
+            "with drop_last=True -- every epoch would silently run zero minibatches (the head "
+            "never trains and every metric stays at its identity-init value with no error raised). "
+            "Lower training.batch_size or provide more reference data."
+        )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     head = CorrectionHead(

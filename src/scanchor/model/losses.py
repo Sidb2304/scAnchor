@@ -111,15 +111,31 @@ def variance_floor_penalty(
     return penalty / max(n_terms, 1)
 
 
+def adversarial_batch_loss(batch_logits: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
+    """Cross-entropy of a batch discriminator's predictions.
+
+    Call with logits from `BatchDiscriminator(corrected, lambd)` — the
+    discriminator's forward pass applies a gradient-reversal layer, so a
+    single backward() through this loss trains the discriminator normally
+    (better at predicting batch) while pushing the correction head to make
+    batch identity LESS predictable. Plain cross-entropy here, deliberately;
+    the adversarial direction lives entirely in the discriminator's GRL, not
+    in this loss function, so it stays trivially testable on its own.
+    """
+    return F.cross_entropy(batch_logits, batch_ids)
+
+
 def correction_loss(
     original: torch.Tensor,
     corrected: torch.Tensor,
     labels: torch.Tensor,
     donor_ids: torch.Tensor | None = None,
     batch_ids: torch.Tensor | None = None,
+    batch_logits: torch.Tensor | None = None,
     contrastive_weight: float = 1.0,
     variance_weight: float = 1.0,
     donor_weight: float = 1.0,
+    adversarial_weight: float = 1.0,
     temperature: float = 0.1,
     min_variance_ratio: float = 0.8,
 ) -> tuple[torch.Tensor, dict[str, float]]:
@@ -132,9 +148,15 @@ def correction_loss(
         donor_term = donor_consistency_loss(corrected, donor_ids, batch_ids, temperature=temperature)
         total = total + donor_weight * donor_term
 
+    adversarial_term = torch.zeros((), device=corrected.device)
+    if batch_logits is not None and batch_ids is not None:
+        adversarial_term = adversarial_batch_loss(batch_logits, batch_ids)
+        total = total + adversarial_weight * adversarial_term
+
     return total, {
         "contrastive": contrastive.item(),
         "variance_penalty": variance_penalty.item(),
         "donor_consistency": donor_term.item(),
+        "adversarial_batch": adversarial_term.item(),
         "total": total.item(),
     }

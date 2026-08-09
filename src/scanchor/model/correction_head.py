@@ -16,6 +16,16 @@ class CorrectionHead(nn.Module):
     starts from "trust the foundation model" and only learns to move cells as
     far as the covariate-conditioned signal justifies — rather than having to
     relearn a faithful reconstruction of `e` from scratch.
+
+    `max_delta_ratio` bounds ||delta|| to at most this fraction of ||embedding||
+    per cell. Without it, an adversarial batch-discriminator objective has a
+    degenerate way to "win": blow up embedding magnitude in some direction
+    that saturates the discriminator's logits, rather than genuinely removing
+    batch structure. That's not a hypothetical -- unbounded delta is what
+    caused a real runaway divergence on real data (adversarial loss climbing
+    into the tens of thousands over training, every downstream metric
+    collapsing). The variance-floor loss doesn't catch this: it only
+    penalizes variance dropping too low, not growing unbounded.
     """
 
     def __init__(
@@ -26,8 +36,10 @@ class CorrectionHead(nn.Module):
         cat_embed_dim: int = 8,
         covariate_dim: int = 32,
         hidden_dim: int = 256,
+        max_delta_ratio: float = 1.0,
     ):
         super().__init__()
+        self.max_delta_ratio = max_delta_ratio
         self.covariate_encoder = CovariateEncoder(
             vocab_sizes=vocab_sizes,
             n_continuous=n_continuous,
@@ -53,4 +65,10 @@ class CorrectionHead(nn.Module):
     ) -> torch.Tensor:
         c = self.covariate_encoder(categorical_ids, continuous)
         delta = self.delta_net(torch.cat([embedding, c], dim=-1))
+
+        delta_norm = delta.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+        max_norm = self.max_delta_ratio * embedding.norm(dim=-1, keepdim=True)
+        scale = (max_norm / delta_norm).clamp(max=1.0)
+        delta = delta * scale
+
         return embedding + delta

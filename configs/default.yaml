@@ -23,6 +23,10 @@ model:
   cat_embed_dim: 8
   covariate_dim: 32
   hidden_dim: 256
+  # Caps ||delta|| at this fraction of ||embedding|| per cell. Without this,
+  # the adversarial objective below has a degenerate way to "win": blow up
+  # embedding magnitude rather than genuinely removing batch structure.
+  max_delta_ratio: 1.0
 
 training:
   batch_size: 512
@@ -32,6 +36,16 @@ training:
   contrastive_weight: 1.0
   variance_weight: 1.0
   donor_weight: 1.0
+  # Adversarial batch discriminator (gradient-reversal): pushes the
+  # correction head to make batch identity harder to predict, rather than
+  # relying only on the "pull together" contrastive/donor terms above.
+  # adversarial_lambda ramps 0 -> this value over training (Ganin & Lempitsky
+  # schedule) rather than applying full strength from epoch 0 -- a fixed
+  # lambda=1.0 from the start caused runaway divergence on real data
+  # (adversarial loss 2.07 -> 30,224 over 30 epochs, everything collapsed).
+  adversarial_weight: 1.0
+  adversarial_lambda: 1.0
+  grad_clip_norm: 5.0
   min_variance_ratio: 0.8
   checkpoint_out: checkpoints/correction_head.pt
 

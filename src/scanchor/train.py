@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from scanchor.config import load_config
 from scanchor.data.datasets import load_reference_panel
+from scanchor.model.batch_discriminator import BatchDiscriminator, dann_lambda_schedule
 from scanchor.model.correction_head import CorrectionHead
 from scanchor.model.losses import correction_loss
 
@@ -38,12 +39,30 @@ def train(config: dict) -> CorrectionHead:
         cat_embed_dim=model_cfg["cat_embed_dim"],
         covariate_dim=model_cfg["covariate_dim"],
         hidden_dim=model_cfg["hidden_dim"],
+        max_delta_ratio=model_cfg.get("max_delta_ratio", 1.0),
     ).to(device)
-    optimizer = torch.optim.Adam(head.parameters(), lr=train_cfg["learning_rate"])
+
+    # n_batches from the actual training data, not the covariate vocab (which
+    # includes the +1 UNK slot for batches never seen during training).
+    n_batches = int(dataset.batch_codes.max()) + 1
+    discriminator = BatchDiscriminator(embed_dim=model_cfg["embed_dim"], n_batches=n_batches).to(device)
+
+    optimizer = torch.optim.Adam(
+        list(head.parameters()) + list(discriminator.parameters()), lr=train_cfg["learning_rate"]
+    )
+    max_adversarial_lambda = train_cfg.get("adversarial_lambda", 1.0)
+    grad_clip_norm = train_cfg.get("grad_clip_norm", 5.0)
+    all_params = list(head.parameters()) + list(discriminator.parameters())
 
     for epoch in range(train_cfg["epochs"]):
-        epoch_metrics = {"contrastive": 0.0, "variance_penalty": 0.0, "donor_consistency": 0.0, "total": 0.0}
-        n_batches = 0
+        adversarial_lambda = dann_lambda_schedule(
+            progress=epoch / max(train_cfg["epochs"] - 1, 1), max_lambda=max_adversarial_lambda
+        )
+        epoch_metrics = {
+            "contrastive": 0.0, "variance_penalty": 0.0,
+            "donor_consistency": 0.0, "adversarial_batch": 0.0, "total": 0.0,
+        }
+        n_minibatches = 0
         for embedding, categorical_ids, continuous, cell_type, batch_code, donor_code in loader:
             embedding = embedding.to(device)
             categorical_ids = categorical_ids.to(device)
@@ -53,31 +72,36 @@ def train(config: dict) -> CorrectionHead:
             donor_code = donor_code.to(device)
 
             corrected = head(embedding, categorical_ids, continuous)
+            batch_logits = discriminator(corrected, lambd=adversarial_lambda)
             loss, metrics = correction_loss(
                 original=embedding,
                 corrected=corrected,
                 labels=cell_type,
                 donor_ids=donor_code,
                 batch_ids=batch_code,
+                batch_logits=batch_logits,
                 contrastive_weight=train_cfg["contrastive_weight"],
                 variance_weight=train_cfg["variance_weight"],
                 donor_weight=train_cfg.get("donor_weight", 1.0),
+                adversarial_weight=train_cfg.get("adversarial_weight", 1.0),
                 temperature=train_cfg["contrastive_temperature"],
                 min_variance_ratio=train_cfg["min_variance_ratio"],
             )
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(all_params, max_norm=grad_clip_norm)
             optimizer.step()
 
             for k, v in metrics.items():
                 epoch_metrics[k] += v
-            n_batches += 1
+            n_minibatches += 1
 
-        avg = {k: v / max(n_batches, 1) for k, v in epoch_metrics.items()}
-        print(f"epoch {epoch:03d} | contrastive {avg['contrastive']:.4f} "
+        avg = {k: v / max(n_minibatches, 1) for k, v in epoch_metrics.items()}
+        print(f"epoch {epoch:03d} | lambda {adversarial_lambda:.4f} | contrastive {avg['contrastive']:.4f} "
               f"| variance_penalty {avg['variance_penalty']:.4f} "
-              f"| donor_consistency {avg['donor_consistency']:.4f} | total {avg['total']:.4f}")
+              f"| donor_consistency {avg['donor_consistency']:.4f} "
+              f"| adversarial_batch {avg['adversarial_batch']:.4f} | total {avg['total']:.4f}")
 
     checkpoint_path = Path(train_cfg["checkpoint_out"])
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

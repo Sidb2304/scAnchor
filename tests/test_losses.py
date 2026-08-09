@@ -1,6 +1,8 @@
 import torch
+import torch.nn.functional as F
 
 from scanchor.model.losses import (
+    adversarial_batch_loss,
     correction_loss,
     donor_consistency_loss,
     supervised_contrastive_loss,
@@ -47,8 +49,11 @@ def test_correction_loss_combines_both_terms():
     total, metrics = correction_loss(original, corrected, labels)
 
     assert torch.isfinite(total)
-    assert set(metrics.keys()) == {"contrastive", "variance_penalty", "donor_consistency", "total"}
+    assert set(metrics.keys()) == {
+        "contrastive", "variance_penalty", "donor_consistency", "adversarial_batch", "total",
+    }
     assert metrics["donor_consistency"] == 0.0  # no donor_ids passed -> term is inert
+    assert metrics["adversarial_batch"] == 0.0  # no batch_logits passed -> term is inert
 
 
 def test_donor_consistency_loss_zero_when_no_cross_batch_positive():
@@ -96,3 +101,26 @@ def test_correction_loss_includes_donor_term_when_provided():
 
     assert torch.isfinite(total)
     assert metrics["donor_consistency"] > 0.0
+
+
+def test_adversarial_batch_loss_is_cross_entropy():
+    logits = torch.randn(6, 3)
+    batch_ids = torch.randint(0, 3, (6,))
+
+    loss = adversarial_batch_loss(logits, batch_ids)
+
+    assert torch.allclose(loss, F.cross_entropy(logits, batch_ids))
+
+
+def test_correction_loss_includes_adversarial_term_when_provided():
+    torch.manual_seed(0)
+    original = torch.randn(6, 8)
+    corrected = original + 0.01 * torch.randn(6, 8)
+    labels = torch.randint(0, 3, (6,))
+    batch_ids = torch.tensor([0, 0, 1, 1, 2, 2])
+    batch_logits = torch.randn(6, 3)
+
+    total, metrics = correction_loss(original, corrected, labels, batch_ids=batch_ids, batch_logits=batch_logits)
+
+    assert torch.isfinite(total)
+    assert metrics["adversarial_batch"] > 0.0

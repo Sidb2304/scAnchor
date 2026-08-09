@@ -32,9 +32,64 @@ everything you've already processed.
 
 ## Status
 
-Early scaffold. Architecture, training loop, and evaluation protocol are
-implemented; embedding extraction currently targets scGPT. Not yet validated —
-see `docs/validation_plan.md` (Evaluation, below) before relying on results.
+Validated end-to-end against real data, with a partial, honestly-reported
+result — not a finished method. See **Current results** below before relying
+on this for anything beyond experimentation.
+
+## Current results
+
+Tested on a real, genetically-demultiplexed multi-donor iPSC-derived
+astrocyte dataset (schizophrenia cohort, "mini-village" pooling design — 8
+donors fully crossed with 9 technical batches, so donor identity and batch
+are not confounded). Not a public benchmark release; reproducing this exactly
+requires access to the source data.
+
+**Backbone matters more than expected.** scGPT's `whole-human`/`brain`
+checkpoint vs. its `continual pretrained` checkpoint (built by the scGPT
+authors specifically for zero-shot embedding tasks, which is exactly what
+this project does) gives a clear, consistent gap at matched data volume — the
+continual-pretrained checkpoint encodes donor identity more strongly from the
+start and every downstream metric improves accordingly. **Use
+`continual pretrained`, not `brain` or `whole-human`, as the default
+backbone.**
+
+**Data volume is the strongest lever found.** Going from ~1.8k to ~3.4k real
+cells (same checkpoint, same code) took donor-retrieval accuracy after
+correction from flat/negative to a clear improvement. This wasn't tuned for —
+it was the single biggest change across every experiment run.
+
+**Where the method stands today** (continual-pretrained checkpoint, 3405
+real cells, held-out batch never seen during training):
+
+| metric | before correction | after correction |
+|---|---|---|
+| donor retrieval accuracy | 0.422 | **0.484** (improved) |
+| cell-type kNN purity | 0.358 | **0.539** (improved) |
+| batch-mixing purity (lower is better) | 0.220 | 0.431 (**worse**) |
+
+The adversarial batch-discriminator term (see `model/batch_discriminator.py`)
+converges correctly — its own loss settles near `log(n_batches)`, meaning the
+discriminator is reduced to chance-level guessing, the intended adversarial
+equilibrium. But that doesn't translate into better batch-mixing by a
+kNN-based metric: a shallow discriminator reaching equilibrium only
+guarantees invariance to what *it* can detect, not to finer local
+neighborhood structure a kNN metric picks up. **This is the open problem** —
+donor signal preservation is real and improving, batch-mixing is not yet
+solved, and shipping this as "batch correction" without that caveat would be
+dishonest. Candidate next steps: a stronger/deeper discriminator, reweighting
+the loss terms, running on the full dataset rather than a subsample (the
+strongest lever so far), or reconsidering whether kNN purity is the right
+metric for what an adversarial-linear approach can realistically achieve.
+
+Two real numerical-instability bugs were found and fixed getting here (see
+git history): a fixed adversarial strength from step one caused runaway
+divergence (loss climbing into the tens of thousands, every metric
+collapsing) until (1) the adversarial strength was ramped in via the
+Ganin & Lempitsky (2015) schedule instead of applied at full strength
+immediately, and (2) the residual correction's magnitude was explicitly
+bounded — without that, the correction head could "win" the adversarial game
+by inflating embedding scale rather than genuinely removing batch structure,
+and the variance-floor loss doesn't catch runaway growth, only collapse.
 
 ## Install
 
@@ -42,6 +97,14 @@ see `docs/validation_plan.md` (Evaluation, below) before relying on results.
 pip install -e ".[scgpt]"       # embedding extraction via scGPT
 pip install -e ".[baselines]"   # Harmony / scVI / scib for comparison
 ```
+
+Download a scGPT checkpoint from the [model zoo](https://github.com/bowang-lab/scGPT#pretrained-scgpt-model-zoo)
+— use **`continual pretrained`**, not `brain` or `whole-human` (see Current
+results above). On macOS/CPU, also pass `use_fast_transformer=False` to
+`extract_embeddings` (no `flash-attn`); `scgpt_extract.py` already works
+around two Linux-only assumptions in the upstream package (`os.sched_getaffinity`
+and a dataloader class that can't be pickled under macOS's `spawn` start
+method) so this just works without extra flags beyond that one.
 
 ## Quickstart
 

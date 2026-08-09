@@ -1,0 +1,39 @@
+reference_panel:
+  # Pre-embedded (scgpt_extract.py output) AnnData files, e.g. scIB benchmark
+  # tasks. Add more files here as the reference panel grows.
+  paths:
+    - data/reference/immune_atlas.embedded.h5ad
+    - data/reference/pancreas_atlas.embedded.h5ad
+  embedding_key: X_scGPT
+  cell_type_col: cell_type
+  batch_col: batch
+  categorical_covariate_cols:
+    - batch
+    - chemistry
+  continuous_covariate_cols:
+    - total_counts
+    - pct_counts_mt
+
+model:
+  embed_dim: 512          # must match the foundation model's output dim
+  cat_embed_dim: 8
+  covariate_dim: 32
+  hidden_dim: 256
+
+training:
+  batch_size: 512
+  epochs: 50
+  learning_rate: 1.0e-3
+  contrastive_temperature: 0.1
+  contrastive_weight: 1.0
+  variance_weight: 1.0
+  min_variance_ratio: 0.8
+  checkpoint_out: checkpoints/correction_head.pt
+
+validation:
+  # Dataset held out entirely from training(paths above) for the
+  # leave-one-batch-out test, plus a replicate-structured dataset for the
+  # same-donor-across-batch test.
+  leave_one_batch_out_path: data/reference/held_out_batch.embedded.h5ad
+  replicate_dataset_path: data/validation/jerber_hipsci.embedded.h5ad
+  donor_col: donor_id

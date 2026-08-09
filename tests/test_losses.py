@@ -1,6 +1,11 @@
 import torch
 
-from scanchor.model.losses import correction_loss, supervised_contrastive_loss, variance_floor_penalty
+from scanchor.model.losses import (
+    correction_loss,
+    donor_consistency_loss,
+    supervised_contrastive_loss,
+    variance_floor_penalty,
+)
 
 
 def test_supervised_contrastive_loss_is_finite_and_positive():
@@ -42,4 +47,52 @@ def test_correction_loss_combines_both_terms():
     total, metrics = correction_loss(original, corrected, labels)
 
     assert torch.isfinite(total)
-    assert set(metrics.keys()) == {"contrastive", "variance_penalty", "total"}
+    assert set(metrics.keys()) == {"contrastive", "variance_penalty", "donor_consistency", "total"}
+    assert metrics["donor_consistency"] == 0.0  # no donor_ids passed -> term is inert
+
+
+def test_donor_consistency_loss_zero_when_no_cross_batch_positive():
+    """Each donor confined to a single batch -> no valid positive pair -> 0."""
+    embeddings = torch.randn(12, 8)
+    donor_ids = torch.tensor([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2])
+    batch_ids = torch.tensor([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2])  # donor <-> batch 1:1
+
+    loss = donor_consistency_loss(embeddings, donor_ids, batch_ids)
+
+    assert loss.item() == 0.0
+
+
+def test_donor_consistency_loss_finite_when_donors_crossed_with_batches():
+    torch.manual_seed(0)
+    embeddings = torch.randn(12, 8)
+    donor_ids = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
+    batch_ids = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])  # every donor in every batch
+
+    loss = donor_consistency_loss(embeddings, donor_ids, batch_ids)
+
+    assert torch.isfinite(loss)
+    assert loss.item() > 0
+
+
+def test_donor_consistency_loss_ignores_unknown_donor_cells():
+    embeddings = torch.randn(6, 8)
+    donor_ids = torch.tensor([-1, -1, -1, -1, -1, -1])
+    batch_ids = torch.tensor([0, 0, 1, 1, 2, 2])
+
+    loss = donor_consistency_loss(embeddings, donor_ids, batch_ids)
+
+    assert loss.item() == 0.0
+
+
+def test_correction_loss_includes_donor_term_when_provided():
+    torch.manual_seed(0)
+    original = torch.randn(12, 8)
+    corrected = original + 0.01 * torch.randn(12, 8)
+    labels = torch.randint(0, 3, (12,))
+    donor_ids = torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
+    batch_ids = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
+
+    total, metrics = correction_loss(original, corrected, labels, donor_ids=donor_ids, batch_ids=batch_ids)
+
+    assert torch.isfinite(total)
+    assert metrics["donor_consistency"] > 0.0

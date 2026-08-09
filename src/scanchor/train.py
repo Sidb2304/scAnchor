@@ -26,6 +26,7 @@ def train(config: dict) -> CorrectionHead:
         embedding_key=ref_cfg["embedding_key"],
         cell_type_col=ref_cfg["cell_type_col"],
         batch_col=ref_cfg["batch_col"],
+        donor_col=ref_cfg.get("donor_col"),
     )
     loader = DataLoader(dataset, batch_size=train_cfg["batch_size"], shuffle=True, drop_last=True)
 
@@ -41,21 +42,26 @@ def train(config: dict) -> CorrectionHead:
     optimizer = torch.optim.Adam(head.parameters(), lr=train_cfg["learning_rate"])
 
     for epoch in range(train_cfg["epochs"]):
-        epoch_metrics = {"contrastive": 0.0, "variance_penalty": 0.0, "total": 0.0}
+        epoch_metrics = {"contrastive": 0.0, "variance_penalty": 0.0, "donor_consistency": 0.0, "total": 0.0}
         n_batches = 0
-        for embedding, categorical_ids, continuous, cell_type, _batch_id in loader:
+        for embedding, categorical_ids, continuous, cell_type, batch_code, donor_code in loader:
             embedding = embedding.to(device)
             categorical_ids = categorical_ids.to(device)
             continuous = continuous.to(device)
             cell_type = cell_type.to(device)
+            batch_code = batch_code.to(device)
+            donor_code = donor_code.to(device)
 
             corrected = head(embedding, categorical_ids, continuous)
             loss, metrics = correction_loss(
                 original=embedding,
                 corrected=corrected,
                 labels=cell_type,
+                donor_ids=donor_code,
+                batch_ids=batch_code,
                 contrastive_weight=train_cfg["contrastive_weight"],
                 variance_weight=train_cfg["variance_weight"],
+                donor_weight=train_cfg.get("donor_weight", 1.0),
                 temperature=train_cfg["contrastive_temperature"],
                 min_variance_ratio=train_cfg["min_variance_ratio"],
             )
@@ -70,7 +76,8 @@ def train(config: dict) -> CorrectionHead:
 
         avg = {k: v / max(n_batches, 1) for k, v in epoch_metrics.items()}
         print(f"epoch {epoch:03d} | contrastive {avg['contrastive']:.4f} "
-              f"| variance_penalty {avg['variance_penalty']:.4f} | total {avg['total']:.4f}")
+              f"| variance_penalty {avg['variance_penalty']:.4f} "
+              f"| donor_consistency {avg['donor_consistency']:.4f} | total {avg['total']:.4f}")
 
     checkpoint_path = Path(train_cfg["checkpoint_out"])
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

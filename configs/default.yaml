@@ -7,6 +7,10 @@ reference_panel:
   embedding_key: X_scGPT
   cell_type_col: cell_type
   batch_col: batch
+  # Optional. When set, enables the donor-consistency loss term -- only
+  # learnable if donors are crossed with batches (each donor appears in more
+  # than one batch); otherwise the term stays inert at 0.
+  donor_col: donor_id
   categorical_covariate_cols:
     - batch
     - chemistry
@@ -27,6 +31,7 @@ training:
   contrastive_temperature: 0.1
   contrastive_weight: 1.0
   variance_weight: 1.0
+  donor_weight: 1.0
   min_variance_ratio: 0.8
   checkpoint_out: checkpoints/correction_head.pt
 

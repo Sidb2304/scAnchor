@@ -1,4 +1,4 @@
-"""Training objective: supervised contrastive alignment + a variance-floor guard.
+"""Training objective: contrastive alignment + donor consistency + a variance-floor guard.
 
 The variance-floor term exists because the scIB benchmarking blind spot means
 a contrastive loss alone can quietly collapse within-cell-type variance to
@@ -14,6 +14,20 @@ import torch
 import torch.nn.functional as F
 
 
+def _mean_positive_log_prob(sim: torch.Tensor, positive_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Mean log-prob of positives per row, and which rows have >=1 positive.
+
+    Shared by both contrastive losses below. Uses torch.where rather than
+    `log_prob * positive_mask`: sim's diagonal is -inf (self-similarity is
+    always excluded), and 0 * -inf is NaN under IEEE float rules.
+    """
+    has_positive = positive_mask.any(dim=1)
+    log_prob = sim - torch.logsumexp(sim, dim=1, keepdim=True)
+    masked_log_prob = torch.where(positive_mask, log_prob, torch.zeros_like(log_prob))
+    positive_log_prob = masked_log_prob.sum(dim=1) / positive_mask.sum(dim=1).clamp(min=1)
+    return positive_log_prob, has_positive
+
+
 def supervised_contrastive_loss(
     embeddings: torch.Tensor,
     labels: torch.Tensor,
@@ -26,13 +40,49 @@ def supervised_contrastive_loss(
 
     same_label = labels.unsqueeze(0) == labels.unsqueeze(1)
     same_label.fill_diagonal_(False)
-    has_positive = same_label.any(dim=1)
 
-    log_prob = sim - torch.logsumexp(sim, dim=1, keepdim=True)
-    # torch.where, not `log_prob * same_label`: the diagonal is -inf and
-    # always masked out, and 0 * -inf is NaN under IEEE float rules.
-    masked_log_prob = torch.where(same_label, log_prob, torch.zeros_like(log_prob))
-    positive_log_prob = masked_log_prob.sum(dim=1) / same_label.sum(dim=1).clamp(min=1)
+    positive_log_prob, has_positive = _mean_positive_log_prob(sim, same_label)
+    return -positive_log_prob[has_positive].mean()
+
+
+def donor_consistency_loss(
+    embeddings: torch.Tensor,
+    donor_ids: torch.Tensor,
+    batch_ids: torch.Tensor,
+    temperature: float = 0.1,
+) -> torch.Tensor:
+    """Pulls together same-donor cells that come from *different* batches.
+
+    This is the mechanism that's actually supposed to make correction
+    donor-preserving rather than just batch-mixing: positives are restricted
+    to same-donor-different-batch pairs (not same-donor-same-batch, which is
+    already trivially satisfied and wouldn't teach the head anything about
+    cross-batch donor identity). It's only learnable when the reference panel
+    has donors crossed with batches — a donor represented in only one batch
+    gives no valid positive pair and is excluded via `has_positive`.
+
+    Cells with donor_ids < 0 (donor identity unknown/not applicable) are
+    dropped before computing the loss.
+    """
+    valid = donor_ids >= 0
+    if valid.sum() < 2:
+        return torch.zeros((), device=embeddings.device)
+
+    z = F.normalize(embeddings[valid], dim=-1)
+    donor_ids = donor_ids[valid]
+    batch_ids = batch_ids[valid]
+
+    sim = z @ z.T / temperature
+    sim.fill_diagonal_(float("-inf"))
+
+    same_donor = donor_ids.unsqueeze(0) == donor_ids.unsqueeze(1)
+    different_batch = batch_ids.unsqueeze(0) != batch_ids.unsqueeze(1)
+    positive_mask = same_donor & different_batch
+    positive_mask.fill_diagonal_(False)
+
+    positive_log_prob, has_positive = _mean_positive_log_prob(sim, positive_mask)
+    if not has_positive.any():
+        return torch.zeros((), device=embeddings.device)
     return -positive_log_prob[has_positive].mean()
 
 
@@ -65,16 +115,26 @@ def correction_loss(
     original: torch.Tensor,
     corrected: torch.Tensor,
     labels: torch.Tensor,
+    donor_ids: torch.Tensor | None = None,
+    batch_ids: torch.Tensor | None = None,
     contrastive_weight: float = 1.0,
     variance_weight: float = 1.0,
+    donor_weight: float = 1.0,
     temperature: float = 0.1,
     min_variance_ratio: float = 0.8,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     contrastive = supervised_contrastive_loss(corrected, labels, temperature=temperature)
     variance_penalty = variance_floor_penalty(original, corrected, labels, min_ratio=min_variance_ratio)
     total = contrastive_weight * contrastive + variance_weight * variance_penalty
+
+    donor_term = torch.zeros((), device=corrected.device)
+    if donor_ids is not None and batch_ids is not None:
+        donor_term = donor_consistency_loss(corrected, donor_ids, batch_ids, temperature=temperature)
+        total = total + donor_weight * donor_term
+
     return total, {
         "contrastive": contrastive.item(),
         "variance_penalty": variance_penalty.item(),
+        "donor_consistency": donor_term.item(),
         "total": total.item(),
     }

@@ -35,7 +35,7 @@ def run(config: dict, checkpoint_path: str | Path) -> dict:
     combined = ad.concat([reference, held_out], join="outer", index_unique="-c")
 
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    vocab: CovariateVocab = checkpoint["vocab"]
+    vocab = CovariateVocab.from_dict(checkpoint["vocab"])
     # Sanity check: the held-out batch's ID must not be in the training vocab,
     # otherwise this isn't testing inductive generalization at all.
     held_out_batches = set(held_out.obs[ref_cfg["batch_col"]].astype(str))

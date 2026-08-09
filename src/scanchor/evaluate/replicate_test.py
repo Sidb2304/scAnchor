@@ -21,7 +21,7 @@ def run(config: dict, checkpoint_path: str | Path) -> dict:
 
     adata = ad.read_h5ad(val_cfg["replicate_dataset_path"])
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    vocab: CovariateVocab = checkpoint["vocab"]
+    vocab = CovariateVocab.from_dict(checkpoint["vocab"])
 
     head = CorrectionHead(
         embed_dim=model_cfg["embed_dim"],

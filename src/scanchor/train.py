@@ -74,7 +74,7 @@ def train(config: dict) -> CorrectionHead:
 
     checkpoint_path = Path(train_cfg["checkpoint_out"])
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": head.state_dict(), "vocab": vocab}, checkpoint_path)
+    torch.save({"state_dict": head.state_dict(), "vocab": vocab.to_dict()}, checkpoint_path)
     print(f"saved checkpoint to {checkpoint_path}")
     return head
 

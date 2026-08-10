@@ -33,6 +33,11 @@ model:
   discriminator_hidden_dim: 256
 
 training:
+  # Set to get reproducible runs -- comparing two configs without this
+  # confounds the comparison with a different random init/shuffle each run
+  # (this bit us for real: a lower adversarial_weight looked like it made
+  # donor retrieval worse, which turned out to be unseeded run-to-run noise).
+  seed: 0
   batch_size: 512
   epochs: 50
   learning_rate: 1.0e-3

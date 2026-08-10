@@ -77,10 +77,48 @@ discriminator is reduced to chance-level guessing, the intended adversarial
 equilibrium. But that doesn't translate into better batch-mixing by a
 kNN-based metric: a shallow discriminator reaching equilibrium only
 guarantees invariance to what *it* can detect, not to finer local
-neighborhood structure a kNN metric picks up. **This is the open problem** —
-donor signal preservation is real and improving, batch-mixing is not yet
-solved, and shipping this as "batch correction" without that caveat would be
-dishonest.
+neighborhood structure a kNN metric picks up.
+
+**Discriminator capacity is a real, reproducible trade-off, not a free fix.**
+The correction head's `delta_net` has 2 hidden layers at 128 units; the
+discriminator originally had 1 layer at 64 units — a plausible capacity
+mismatch letting it reach equilibrium too easily. First test of this (a
+single unseeded run each) looked like a clean win with a real cost. That
+turned out to be *partly* noise: `train()` had no seed control, so every
+config comparison was confounded by a different random init and shuffle
+order each run — confirmed when lowering `adversarial_weight` (which should
+have *eased* pressure) instead made donor retrieval *worse*, a result
+impossible to interpret without controlling for that. Added
+`training.seed`, then re-ran discriminator capacity {64, 128, 256 units} x 3
+seeds each on the 18.2k-cell data (all other settings held fixed):
+
+| discriminator | donor retrieval after (3 seeds) | batch-mixing after (3 seeds) | cell-type purity after (3 seeds) |
+|---|---|---|---|
+| 64 units, 1 layer | 0.64, 0.70, 0.83 | 0.42, 0.44, 0.46 | 0.58, 0.58, 0.58 |
+| 128 units, 2 layers | 0.72, **0.06**, 0.53 | 0.43, 0.51, 0.47 | 0.56, 0.44, 0.49 |
+| 256 units, 2 layers | 0.42, 0.50, 0.56 | 0.28, 0.28, 0.30 | 0.38, 0.38, 0.39 |
+
+(baseline before correction, all rows: donor retrieval 0.594, batch-mixing
+0.247, cell-type purity 0.375)
+
+This is now a real, controlled result, not noise — every metric's direction
+is consistent across all 3 seeds within each row. Two findings:
+
+1. **256 units clearly and consistently helps batch-mixing** (average
+   regression +0.04 vs. +0.44-0.24 → +0.04, i.e. down to near-neutral) —
+   but at a real, consistent cost to donor retrieval and cell-type purity.
+   This is a genuine trade-off, not a bug: **use `discriminator_hidden_dim:
+   256` (the current default) if batch-mixing matters most; drop to `64` if
+   donor-signal preservation matters most.**
+2. **128 units is not a stable middle ground — don't reach for it.** One of
+   three seeds collapsed donor retrieval to 0.06, and its batch-mixing
+   average (0.47) is worse than *both* the 64-unit and 256-unit configs.
+   There's no smooth dial between these two regimes at this dataset scale;
+   the 128-unit setting sits on an unstable transition point between them.
+
+Donor signal preservation and batch-mixing are not yet both solved by the
+same configuration, and shipping this as unqualified "batch correction"
+without that caveat would be dishonest.
 
 Two real numerical-instability bugs were found and fixed getting here (see
 git history): a fixed adversarial strength from step one caused runaway

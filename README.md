@@ -130,6 +130,42 @@ bounded — without that, the correction head could "win" the adversarial game
 by inflating embedding scale rather than genuinely removing batch structure,
 and the variance-floor loss doesn't catch runaway growth, only collapse.
 
+**Public-dataset validation (Jerber et al. 2021) did not replicate the
+donor-retrieval gains seen on the private dataset above — and it's not a
+dilution artifact.** Jerber et al.'s day-11 timepoint (public, see Reference
+panel below) is a real, harder test: 253,381 cells, 177 donors, 12
+differentiation pools — but only 25 donors are crossed across >=1 pool
+globally, and holding out one pool (`pool7`, 4,452 cells, used whole) for
+the leave-one-batch-out test leaves only **19 of 162 donors** genuinely
+crossed within the training data itself. Day-11 cells are also ~96% just two
+closely-related early progenitor states (FPP/P_FPP), far less diverse than
+Levy's mature astrocytes.
+
+| | donor retrieval, before → after |
+|---|---|
+| Full training subsample (7,001 cells, 162 donors, mostly uncrossed) | 0.0 → 0.0 |
+| Filtered to only the 19 genuinely-crossed donors (1,489 cells, no dilution) | 0.0 → 0.0 |
+
+Restricting to a clean, well-crossed subset — removing any dilution from the
+152 single-pool donors that can't contribute to the donor-consistency loss —
+made no difference at all. That rules out "the signal is just diluted" as
+the explanation. The `donor_consistency` loss term itself stayed flat around
+5.3-5.5 for all 30 epochs in both runs, the same signature seen elsewhere in
+this project when a loss term isn't finding any useful gradient — not a
+sign of dilution, a sign of no exploitable signal. Batch-mixing still
+regressed after correction here too, consistent with every other experiment
+in this project regardless of dataset.
+
+**Honest interpretation**: the donor-signal-preservation result from the
+Levy astrocyte data doesn't generalize unqualified to this dataset/timepoint.
+The most likely explanation is biological, not architectural: day-11 iPSC-
+derived midbrain progenitors are very early and transcriptionally
+homogeneous, where donor/genotype signal may simply be weaker relative to
+shared early-developmental programs than in Levy's more mature,
+differentiated astrocytes. Jerber's day-30 and day-52 timepoints (later,
+more differentiated dopaminergic neurons) are a natural next test of that
+hypothesis — not yet run, see Next steps.
+
 ## Install
 
 ```bash
@@ -182,36 +218,42 @@ to approach transductive performance without needing the new batch's data.
 
 ## Next steps
 
-Shipping now with the open problem above documented rather than waiting on
+Shipping now with the open problems above documented rather than waiting on
 these — they're the concrete roadmap, not a hidden gap:
 
-1. **Validate on a public dataset** (Jerber et al. 2021, below) — everything
-   so far is on one private dataset nobody outside this project can rerun.
-   This also doubles as a diagnostic: Jerber is much larger (>1M cells, 215
-   donors) than anything tested here, so it's a direct test of whether the
-   donor-retrieval/cell-type-purity gains that scaled cleanly with data
-   volume (see Current results) keep scaling, and whether the batch-mixing
-   trade-off is scale-limited or fundamental.
-2. **If the same trade-off reappears at that scale**, that's real evidence
-   it's architectural, not a tuning problem — try separate latent subspaces
-   for batch-invariant cell state vs. donor-preserved signal, instead of
-   forcing one shared embedding to satisfy both the adversarial and
-   donor-consistency objectives at once.
+1. **Try Jerber's day-30 and day-52 timepoints** — later, more differentiated
+   dopaminergic neurons, as a direct test of the "day-11 progenitors are just
+   too homogeneous" hypothesis above. If donor retrieval works there the way
+   it did on Levy's mature astrocytes, that's a real, useful finding about
+   *when* this method is applicable (differentiated cell states, not early
+   progenitors) rather than a blanket failure.
+2. **The batch-mixing regression persists across every dataset tested so
+   far** (Levy at two scales, Jerber day-11, both crossing-density
+   conditions) — that consistency itself is evidence it's architectural, not
+   a tuning or data problem. Try separate latent subspaces for batch-invariant
+   cell state vs. donor-preserved signal, instead of forcing one shared
+   embedding to satisfy both the adversarial and donor-consistency objectives
+   at once.
 3. **Baseline comparison against Harmony/scVI/scDisInFact in their normal
    transductive mode** (the wrappers already exist in `evaluate/baselines.py`
    but have never actually been run) — right now there's no comparison point
    showing how this stacks up against existing tools on the same data.
 
-## Reference panel (proposed)
+## Reference panel
 
-- General covariate-conditioned training signal: [scIB benchmark tasks](https://theislab.github.io/scib-reproducibility/)
-  (immune, pancreas, lung atlases) — standard, small, cell-type labeled,
-  multi-batch, and already the comparison point for every batch-correction
-  baseline.
-- Domain validation (replicate structure): Jerber et al. 2021, *Nat Genet*,
-  population-scale scRNA-seq across dopaminergic/serotonergic neuron
-  differentiation (HipSci, multiplexed across differentiation batches) —
-  https://www.nature.com/articles/s41588-021-00801-6
+- General covariate-conditioned training signal (not yet run): [scIB benchmark
+  tasks](https://theislab.github.io/scib-reproducibility/) (immune, pancreas,
+  lung atlases) — standard, small, cell-type labeled, multi-batch, and already
+  the comparison point for every batch-correction baseline.
+- **Public domain validation (used above):** Jerber et al. 2021, *Nat Genet*,
+  population-scale scRNA-seq across dopaminergic neuron differentiation
+  (HipSci, multiplexed across differentiation pools) —
+  https://www.nature.com/articles/s41588-021-00801-6. Processed per-timepoint
+  AnnData-compatible `.h5` files (day 11/30/52, raw + normalized counts, real
+  `donor_id`/`pool_id`/`celltype` obs columns) are on Zenodo:
+  https://zenodo.org/record/4651413 (day11.h5.zip used here, ~3.1GB
+  compressed / ~11.7GB uncompressed; day30/day52 not yet tried, see Next
+  steps).
 
 ## References
 

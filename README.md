@@ -53,19 +53,23 @@ start and every downstream metric improves accordingly. **Use
 `continual pretrained`, not `brain` or `whole-human`, as the default
 backbone.**
 
-**Data volume is the strongest lever found.** Going from ~1.8k to ~3.4k real
-cells (same checkpoint, same code) took donor-retrieval accuracy after
-correction from flat/negative to a clear improvement. This wasn't tuned for —
-it was the single biggest change across every experiment run.
+**Data volume is the strongest lever found — but only for donor-signal
+metrics, not batch-mixing.** Two data points, same checkpoint, same code,
+same held-out batch:
 
-**Where the method stands today** (continual-pretrained checkpoint, 3405
-real cells, held-out batch never seen during training):
-
-| metric | before correction | after correction |
+| metric | ~3.4k cells: before → after | ~18.2k cells: before → after |
 |---|---|---|
-| donor retrieval accuracy | 0.422 | **0.484** (improved) |
-| cell-type kNN purity | 0.358 | **0.539** (improved) |
-| batch-mixing purity (lower is better) | 0.220 | 0.431 (**worse**) |
+| donor retrieval accuracy | 0.422 → **0.484** | 0.594 → **0.875** |
+| cell-type kNN purity | 0.358 → **0.539** | 0.375 → **0.613** |
+| batch-mixing purity (lower is better) | 0.220 → 0.431 (worse) | 0.247 → 0.444 (worse) |
+
+More data drove a *much* bigger gain in donor retrieval (+0.06 → +0.28) and
+cell-type purity as scale went up 5.4x. Batch-mixing didn't move at all —
+the after-correction regression is the same size at both scales (+0.21,
++0.20). That rules out "just needs more data" as the fix for batch-mixing:
+this is a discriminator-capacity or architecture problem, not a data-scale
+one, and running the full ~81k-cell dataset would almost certainly just
+reconfirm this same gap at higher compute cost rather than close it.
 
 The adversarial batch-discriminator term (see `model/batch_discriminator.py`)
 converges correctly — its own loss settles near `log(n_batches)`, meaning the
@@ -76,10 +80,7 @@ guarantees invariance to what *it* can detect, not to finer local
 neighborhood structure a kNN metric picks up. **This is the open problem** —
 donor signal preservation is real and improving, batch-mixing is not yet
 solved, and shipping this as "batch correction" without that caveat would be
-dishonest. Candidate next steps: a stronger/deeper discriminator, reweighting
-the loss terms, running on the full dataset rather than a subsample (the
-strongest lever so far), or reconsidering whether kNN purity is the right
-metric for what an adversarial-linear approach can realistically achieve.
+dishonest.
 
 Two real numerical-instability bugs were found and fixed getting here (see
 git history): a fixed adversarial strength from step one caused runaway

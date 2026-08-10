@@ -166,6 +166,62 @@ differentiated astrocytes. Jerber's day-30 and day-52 timepoints (later,
 more differentiated dopaminergic neurons) are a natural next test of that
 hypothesis — not yet run, see Next steps.
 
+**Split-latent architecture attempt: two real tries, neither beat the simple
+baseline.** Given the batch-mixing regression above is architectural, not a
+tuning problem, `CorrectionHead` was redesigned to split its output into two
+latents from a shared trunk: `z_bio` (contrastive + donor-consistency,
+still the only thing used downstream) and a new `z_batch` explicitly trained
+(no gradient reversal, just a normal classifier — `BatchAbsorber`) to
+*absorb* batch-predictive variance instead of forcing it out of one shared
+representation. First version, on the Levy 18.2k-cell data (seed 0, 256-unit
+discriminator, same as the row above for a clean comparison):
+
+| version | donor retrieval after | batch-mixing after | cell-type purity after |
+|---|---|---|---|
+| single embedding (no split, row above) | 0.42 | **0.28** | 0.38 |
+| v1: `z_bio`/`z_batch` share one trunk | **0.0** (collapsed) | 0.77 (much worse) | 0.42 |
+| v2: separate trunks, no shared layer | 0.39 | 0.41 | 0.42 |
+
+`batch_absorption` converged to near-zero within 1-2 epochs in both
+versions — the absorber genuinely works, `z_batch` really does become
+batch-predictive. v1's shared trunk let that fast-converging signal shape a
+representation `z_bio`'s pathway also drew from, despite separate output
+heads — diagnosed and confirmed by v2 (fully separate trunks, no shared
+hidden layer), which recovered from the collapse but still didn't beat the
+original, simpler single-embedding architecture on batch-mixing, the one
+thing this redesign was built to fix. Kept v2's separate-trunks fix (a real,
+strict improvement over v1) but the split-latent idea itself hasn't earned
+its added complexity yet.
+
+**Baseline calibration: Harmony proves the metric is achievable, just not by
+this method's current mechanism.** `evaluate/baselines.py` existed since
+early in this project but was never actually run until now. On the same
+18.2k-cell combined reference+held-out set (transductive — Harmony gets
+every batch, the fair comparison per that module's own docstring):
+
+| method | batch-mixing purity (lower=better) | cell-type kNN purity |
+|---|---|---|
+| raw embedding, no correction | 0.247 | 0.375 |
+| **Harmony** | **0.188** (real improvement) | 0.320 (worse) |
+| scAnchor (256-unit discriminator) | 0.280 (worse) | 0.380 (better) |
+
+Harmony genuinely improves batch-mixing here (0.247 → 0.188) — this rules
+out "the metric is just unsatisfiable on this data," which every prior
+scAnchor result on this dataset was consistent with but didn't prove either
+way. Harmony pays for its win with worse cell-type purity, a real trade-off
+in the *opposite* direction from scAnchor's — the two methods fail
+differently, not identically, which matters: it means scAnchor's specific
+mechanism (an adversarial classifier trying to make batch identity
+unpredictable) is the more likely culprit, not some property of the
+dataset that makes batch-mixing improvement generally incompatible with
+preserving biological signal. Harmony's actual mechanism is distributional
+alignment via iterative clustering, not an adversarial classifier at all —
+real motivation to try a distribution-matching (MMD) loss next instead of
+another adversarial-classifier variant. Also fixed a real bug getting this
+number: `harmony_correct`'s unconditional `.T` assumed an orientation that
+doesn't hold for the installed harmonypy version, causing a silent shape
+mismatch that would have crashed downstream.
+
 ## Install
 
 ```bash
@@ -221,23 +277,27 @@ to approach transductive performance without needing the new batch's data.
 Shipping now with the open problems above documented rather than waiting on
 these — they're the concrete roadmap, not a hidden gap:
 
-1. **Try Jerber's day-30 and day-52 timepoints** — later, more differentiated
+1. **Try a distribution-matching (MMD) loss instead of the adversarial
+   classifier.** The split-latent architecture change (two attempts, see
+   Current results) didn't fix the batch-mixing regression, and the Harmony
+   baseline comparison shows *why that's worth pursuing*: Harmony genuinely
+   improves this exact metric on this exact data via distributional
+   alignment (iterative clustering), not an adversarial classifier at all.
+   Swapping `BatchDiscriminator`'s mechanism for a Maximum Mean Discrepancy
+   penalty between batches' `z_bio` distributions is the next real attempt,
+   not another adversarial-classifier variant.
+2. **scVI baseline is still blocked** — installed but broken in this
+   environment (a `mudata`/`anndata` version conflict:
+   `AlignedViewMixin` import error). Harmony's comparison is done and
+   documented above; scVI would add a second, differently-mechanized
+   comparison point (full generative model on raw counts, not a post-hoc
+   embedding correction) but needs a dependency fix first.
+3. **Jerber's day-30 and day-52 timepoints** — later, more differentiated
    dopaminergic neurons, as a direct test of the "day-11 progenitors are just
    too homogeneous" hypothesis above. If donor retrieval works there the way
    it did on Levy's mature astrocytes, that's a real, useful finding about
    *when* this method is applicable (differentiated cell states, not early
    progenitors) rather than a blanket failure.
-2. **The batch-mixing regression persists across every dataset tested so
-   far** (Levy at two scales, Jerber day-11, both crossing-density
-   conditions) — that consistency itself is evidence it's architectural, not
-   a tuning or data problem. Try separate latent subspaces for batch-invariant
-   cell state vs. donor-preserved signal, instead of forcing one shared
-   embedding to satisfy both the adversarial and donor-consistency objectives
-   at once.
-3. **Baseline comparison against Harmony/scVI/scDisInFact in their normal
-   transductive mode** (the wrappers already exist in `evaluate/baselines.py`
-   but have never actually been run) — right now there's no comparison point
-   showing how this stacks up against existing tools on the same data.
 
 ## Reference panel
 

@@ -20,6 +20,17 @@ def train(config: dict) -> CorrectionHead:
     model_cfg = config["model"]
     train_cfg = config["training"]
 
+    seed = train_cfg.get("seed")
+    if seed is not None:
+        # Without this, comparing two configs (e.g. discriminator capacity,
+        # loss weights) is confounded by a different random model init and
+        # DataLoader shuffle order each run -- a real problem hit in practice:
+        # reducing adversarial_weight (which should ease pressure on donor
+        # retrieval) instead made it *worse* than a higher-weight run, a
+        # non-monotonic result impossible to interpret without knowing how
+        # much of it is init/shuffle noise vs. the actual change being tested.
+        torch.manual_seed(seed)
+
     dataset, vocab = load_reference_panel(
         paths=ref_cfg["paths"],
         categorical_cols=ref_cfg["categorical_covariate_cols"],

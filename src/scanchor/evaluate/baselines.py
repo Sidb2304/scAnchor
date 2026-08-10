@@ -17,7 +17,15 @@ def harmony_correct(adata: ad.AnnData, embedding_key: str, batch_col: str) -> np
     import harmonypy
 
     ho = harmonypy.run_harmony(adata.obsm[embedding_key], adata.obs, [batch_col])
-    return ho.Z_corr.T
+    corrected = np.asarray(ho.Z_corr)
+    # harmonypy's Z_corr orientation isn't consistent to rely on blindly across
+    # versions -- checked against n_obs rather than assuming (features, cells)
+    # after a real bug here: unconditionally transposing gave a shape
+    # mismatch downstream because this version's Z_corr was already
+    # (n_cells, n_features).
+    if corrected.shape[0] != adata.n_obs:
+        corrected = corrected.T
+    return corrected
 
 
 def scvi_correct(

@@ -62,7 +62,7 @@ class BatchDiscriminator(nn.Module):
     gradients during training.
 
     Two hidden layers at hidden_dim=256 by default, not one layer at 64: a
-    capacity mismatch against CorrectionHead's delta_net (2 hidden layers,
+    capacity mismatch against CorrectionHead's bio_head (2 hidden layers,
     128 units) is a real, evidenced failure mode, not a hypothetical one.
     On real data, the shallow 1-layer/64-unit discriminator converged to
     chance-level loss (the correct adversarial equilibrium by its own
@@ -86,3 +86,28 @@ class BatchDiscriminator(nn.Module):
 
     def forward(self, embeddings: torch.Tensor, lambd: float = 1.0) -> torch.Tensor:
         return self.net(gradient_reversal(embeddings, lambd))
+
+
+class BatchAbsorber(nn.Module):
+    """Predicts batch identity from `z_batch` -- trained normally, no GRL.
+
+    The complementary half of the split-latent fix for the batch-mixing
+    regression documented across every dataset/scale/discriminator-capacity
+    tried on the single shared embedding. Instead of fighting batch
+    structure out of the one representation everything downstream depends
+    on, `z_batch` is explicitly encouraged to *be* batch-predictive -- giving
+    batch-specific variance somewhere to go, so BatchDiscriminator's
+    adversarial job on the corrected embedding is smaller and less likely to
+    conflict with the contrastive/donor-consistency objectives.
+    """
+
+    def __init__(self, latent_dim: int, n_batches: int, hidden_dim: int = 64):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(latent_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, n_batches),
+        )
+
+    def forward(self, z_batch: torch.Tensor) -> torch.Tensor:
+        return self.net(z_batch)

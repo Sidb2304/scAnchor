@@ -31,6 +31,7 @@ def run(config: dict, checkpoint_path: str | Path) -> dict:
         covariate_dim=model_cfg["covariate_dim"],
         hidden_dim=model_cfg["hidden_dim"],
         max_delta_ratio=model_cfg.get("max_delta_ratio", 1.0),
+        batch_latent_dim=model_cfg.get("batch_latent_dim", 32),
     )
     head.load_state_dict(checkpoint["state_dict"])
     head.eval()

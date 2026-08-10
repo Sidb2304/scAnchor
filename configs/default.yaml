@@ -31,6 +31,11 @@ model:
   # experiments -- a discriminator too weak to detect batch structure a kNN
   # metric picks up can reach equilibrium without removing that structure.
   discriminator_hidden_dim: 256
+  # Size of the split-off z_batch latent (see CorrectionHead docstring) that
+  # absorbs batch-predictive variance instead of forcing it out of the main
+  # corrected embedding. Small on purpose -- it only needs to carry batch
+  # signal, not biological signal, and is discarded after training.
+  batch_latent_dim: 32
 
 training:
   # Set to get reproducible runs -- comparing two configs without this
@@ -54,6 +59,11 @@ training:
   # (adversarial loss 2.07 -> 30,224 over 30 epochs, everything collapsed).
   adversarial_weight: 1.0
   adversarial_lambda: 1.0
+  # Weight on the BatchAbsorber term -- trained normally (no GRL) to predict
+  # batch from z_batch, encouraging it to actually absorb batch-predictive
+  # variance so the adversarial term above has less to fight over on the
+  # main corrected embedding.
+  absorption_weight: 1.0
   grad_clip_norm: 5.0
   min_variance_ratio: 0.8
   checkpoint_out: checkpoints/correction_head.pt

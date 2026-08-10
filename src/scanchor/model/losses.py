@@ -132,10 +132,12 @@ def correction_loss(
     donor_ids: torch.Tensor | None = None,
     batch_ids: torch.Tensor | None = None,
     batch_logits: torch.Tensor | None = None,
+    absorber_logits: torch.Tensor | None = None,
     contrastive_weight: float = 1.0,
     variance_weight: float = 1.0,
     donor_weight: float = 1.0,
     adversarial_weight: float = 1.0,
+    absorption_weight: float = 1.0,
     temperature: float = 0.1,
     min_variance_ratio: float = 0.8,
 ) -> tuple[torch.Tensor, dict[str, float]]:
@@ -153,10 +155,20 @@ def correction_loss(
         adversarial_term = adversarial_batch_loss(batch_logits, batch_ids)
         total = total + adversarial_weight * adversarial_term
 
+    # Same cross-entropy math as the adversarial term above -- the direction
+    # (fight batch signal vs. absorb it) comes entirely from whether the
+    # logits passed in went through a GRL (BatchDiscriminator) or not
+    # (BatchAbsorber), not from anything in this loss function.
+    absorption_term = torch.zeros((), device=corrected.device)
+    if absorber_logits is not None and batch_ids is not None:
+        absorption_term = adversarial_batch_loss(absorber_logits, batch_ids)
+        total = total + absorption_weight * absorption_term
+
     return total, {
         "contrastive": contrastive.item(),
         "variance_penalty": variance_penalty.item(),
         "donor_consistency": donor_term.item(),
         "adversarial_batch": adversarial_term.item(),
+        "batch_absorption": absorption_term.item(),
         "total": total.item(),
     }

@@ -1,6 +1,11 @@
 import torch
 
-from scanchor.model.batch_discriminator import BatchDiscriminator, dann_lambda_schedule, gradient_reversal
+from scanchor.model.batch_discriminator import (
+    BatchAbsorber,
+    BatchDiscriminator,
+    dann_lambda_schedule,
+    gradient_reversal,
+)
 
 
 def test_gradient_reversal_forward_is_identity():
@@ -77,3 +82,32 @@ def test_dann_lambda_schedule_monotonically_increases():
 def test_dann_lambda_schedule_clamps_out_of_range_progress():
     assert dann_lambda_schedule(progress=-1.0, max_lambda=1.0) == 0.0
     assert dann_lambda_schedule(progress=5.0, max_lambda=1.0) == dann_lambda_schedule(1.0, max_lambda=1.0)
+
+
+def test_batch_absorber_output_shape():
+    absorber = BatchAbsorber(latent_dim=32, n_batches=5)
+    z_batch = torch.randn(6, 32)
+
+    logits = absorber(z_batch)
+
+    assert logits.shape == (6, 5)
+
+
+def test_batch_absorber_gradient_is_not_reversed():
+    """No GRL here -- gradient on z_batch should point the normal direction
+    (toward better batch prediction), unlike BatchDiscriminator."""
+    absorber = BatchAbsorber(latent_dim=4, n_batches=2)
+    z_batch = torch.randn(3, 4, requires_grad=True)
+    labels = torch.tensor([0, 1, 0])
+
+    logits = absorber(z_batch)
+    loss = torch.nn.functional.cross_entropy(logits, labels)
+    loss.backward()
+
+    # Plain backprop: gradient exists and is NOT the negation of what a
+    # manually-computed plain (non-GRL) gradient would give.
+    grad_via_absorber = z_batch.grad.clone()
+    z_batch2 = z_batch.detach().clone().requires_grad_(True)
+    plain_logits = absorber.net(z_batch2)
+    torch.nn.functional.cross_entropy(plain_logits, labels).backward()
+    assert torch.allclose(grad_via_absorber, z_batch2.grad)

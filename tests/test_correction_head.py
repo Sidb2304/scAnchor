@@ -47,8 +47,8 @@ def test_delta_norm_is_bounded_even_with_an_extreme_raw_delta():
     """
     head = CorrectionHead(embed_dim=16, vocab_sizes=[3], n_continuous=1, max_delta_ratio=0.5)
     with torch.no_grad():
-        head.delta_net[-1].weight.fill_(1000.0)
-        head.delta_net[-1].bias.fill_(1000.0)
+        head.bio_head[-1].weight.fill_(1000.0)
+        head.bio_head[-1].bias.fill_(1000.0)
 
     embedding = torch.randn(4, 16)
     categorical = torch.zeros((4, 1), dtype=torch.long)
@@ -63,8 +63,8 @@ def test_delta_norm_is_bounded_even_with_an_extreme_raw_delta():
 def test_max_delta_ratio_zero_forces_identity():
     head = CorrectionHead(embed_dim=8, vocab_sizes=[3], n_continuous=1, max_delta_ratio=0.0)
     with torch.no_grad():
-        head.delta_net[-1].weight.fill_(50.0)
-        head.delta_net[-1].bias.fill_(50.0)
+        head.bio_head[-1].weight.fill_(50.0)
+        head.bio_head[-1].bias.fill_(50.0)
 
     embedding = torch.randn(3, 8)
     categorical = torch.zeros((3, 1), dtype=torch.long)
@@ -73,3 +73,27 @@ def test_max_delta_ratio_zero_forces_identity():
     corrected = head(embedding, categorical, continuous)
 
     assert torch.allclose(corrected, embedding, atol=1e-5)
+
+
+def test_return_batch_latent_gives_separate_tensor():
+    head = CorrectionHead(embed_dim=16, vocab_sizes=[3], n_continuous=1, batch_latent_dim=5)
+    embedding = torch.randn(6, 16)
+    categorical = torch.randint(0, 3, (6, 1))
+    continuous = torch.randn(6, 1)
+
+    corrected, z_batch = head(embedding, categorical, continuous, return_batch_latent=True)
+
+    assert corrected.shape == embedding.shape
+    assert z_batch.shape == (6, 5)
+
+
+def test_default_forward_without_flag_returns_single_tensor():
+    head = CorrectionHead(embed_dim=8, vocab_sizes=[3], n_continuous=1)
+    embedding = torch.randn(4, 8)
+    categorical = torch.randint(0, 3, (4, 1))
+    continuous = torch.randn(4, 1)
+
+    out = head(embedding, categorical, continuous)
+
+    assert torch.is_tensor(out)
+    assert out.shape == embedding.shape

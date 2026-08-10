@@ -50,10 +50,12 @@ def test_correction_loss_combines_both_terms():
 
     assert torch.isfinite(total)
     assert set(metrics.keys()) == {
-        "contrastive", "variance_penalty", "donor_consistency", "adversarial_batch", "total",
+        "contrastive", "variance_penalty", "donor_consistency",
+        "adversarial_batch", "batch_absorption", "total",
     }
     assert metrics["donor_consistency"] == 0.0  # no donor_ids passed -> term is inert
     assert metrics["adversarial_batch"] == 0.0  # no batch_logits passed -> term is inert
+    assert metrics["batch_absorption"] == 0.0  # no absorber_logits passed -> term is inert
 
 
 def test_donor_consistency_loss_zero_when_no_cross_batch_positive():
@@ -124,3 +126,20 @@ def test_correction_loss_includes_adversarial_term_when_provided():
 
     assert torch.isfinite(total)
     assert metrics["adversarial_batch"] > 0.0
+
+
+def test_correction_loss_includes_absorption_term_when_provided():
+    torch.manual_seed(0)
+    original = torch.randn(6, 8)
+    corrected = original + 0.01 * torch.randn(6, 8)
+    labels = torch.randint(0, 3, (6,))
+    batch_ids = torch.tensor([0, 0, 1, 1, 2, 2])
+    absorber_logits = torch.randn(6, 3)
+
+    total, metrics = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, absorber_logits=absorber_logits
+    )
+
+    assert torch.isfinite(total)
+    assert metrics["batch_absorption"] > 0.0
+    assert metrics["adversarial_batch"] == 0.0  # independent of the absorption term

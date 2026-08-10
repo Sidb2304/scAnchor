@@ -52,7 +52,11 @@ def train(config: dict) -> CorrectionHead:
     # n_batches from the actual training data, not the covariate vocab (which
     # includes the +1 UNK slot for batches never seen during training).
     n_batches = int(dataset.batch_codes.max()) + 1
-    discriminator = BatchDiscriminator(embed_dim=model_cfg["embed_dim"], n_batches=n_batches).to(device)
+    discriminator = BatchDiscriminator(
+        embed_dim=model_cfg["embed_dim"],
+        n_batches=n_batches,
+        hidden_dim=model_cfg.get("discriminator_hidden_dim", 256),
+    ).to(device)
 
     optimizer = torch.optim.Adam(
         list(head.parameters()) + list(discriminator.parameters()), lr=train_cfg["learning_rate"]

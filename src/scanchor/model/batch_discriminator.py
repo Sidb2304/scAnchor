@@ -60,12 +60,26 @@ class BatchDiscriminator(nn.Module):
     test, leave-one-batch-out) only needs the CorrectionHead; the
     discriminator's job is done once it's shaped the correction head's
     gradients during training.
+
+    Two hidden layers at hidden_dim=256 by default, not one layer at 64: a
+    capacity mismatch against CorrectionHead's delta_net (2 hidden layers,
+    128 units) is a real, evidenced failure mode, not a hypothetical one.
+    On real data, the shallow 1-layer/64-unit discriminator converged to
+    chance-level loss (the correct adversarial equilibrium by its own
+    metric) at two different dataset scales (3.4k and 18.2k cells), yet
+    batch-mixing purity by a kNN metric got WORSE after correction both
+    times, by almost the same margin regardless of scale. A discriminator
+    that's too weak to detect batch structure a kNN metric picks up can
+    reach equilibrium without ever forcing the correction head to remove
+    that structure -- it can only push back against what it can see.
     """
 
-    def __init__(self, embed_dim: int, n_batches: int, hidden_dim: int = 64):
+    def __init__(self, embed_dim: int, n_batches: int, hidden_dim: int = 256):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, n_batches),
         )

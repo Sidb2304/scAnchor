@@ -27,6 +27,10 @@ model:
   # the adversarial objective below has a degenerate way to "win": blow up
   # embedding magnitude rather than genuinely removing batch structure.
   max_delta_ratio: 1.0
+  # Match or exceed this, not the 1-layer/64-unit default used in earlier
+  # experiments -- a discriminator too weak to detect batch structure a kNN
+  # metric picks up can reach equilibrium without removing that structure.
+  discriminator_hidden_dim: 256
 
 training:
   batch_size: 512

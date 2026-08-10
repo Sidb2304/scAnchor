@@ -36,6 +36,18 @@ def test_batch_discriminator_output_shape():
     assert logits.shape == (6, 4)
 
 
+def test_batch_discriminator_default_capacity_matches_correction_head():
+    """Locks in the capacity fix: 2 hidden layers at >=128 units, not the
+    original 1-layer/64-unit default that let the discriminator reach
+    equilibrium without removing batch structure a kNN metric could detect.
+    """
+    disc = BatchDiscriminator(embed_dim=512, n_batches=9)
+    linear_layers = [m for m in disc.net if isinstance(m, torch.nn.Linear)]
+
+    assert len(linear_layers) == 3  # input->hidden, hidden->hidden, hidden->output
+    assert linear_layers[0].out_features >= 128
+
+
 def test_batch_discriminator_grl_flows_gradient_to_upstream_input():
     disc = BatchDiscriminator(embed_dim=8, n_batches=3)
     embeddings = torch.randn(5, 8, requires_grad=True)

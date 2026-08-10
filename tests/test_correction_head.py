@@ -47,8 +47,8 @@ def test_delta_norm_is_bounded_even_with_an_extreme_raw_delta():
     """
     head = CorrectionHead(embed_dim=16, vocab_sizes=[3], n_continuous=1, max_delta_ratio=0.5)
     with torch.no_grad():
-        head.bio_head[-1].weight.fill_(1000.0)
-        head.bio_head[-1].bias.fill_(1000.0)
+        head.bio_net[-1].weight.fill_(1000.0)
+        head.bio_net[-1].bias.fill_(1000.0)
 
     embedding = torch.randn(4, 16)
     categorical = torch.zeros((4, 1), dtype=torch.long)
@@ -63,8 +63,8 @@ def test_delta_norm_is_bounded_even_with_an_extreme_raw_delta():
 def test_max_delta_ratio_zero_forces_identity():
     head = CorrectionHead(embed_dim=8, vocab_sizes=[3], n_continuous=1, max_delta_ratio=0.0)
     with torch.no_grad():
-        head.bio_head[-1].weight.fill_(50.0)
-        head.bio_head[-1].bias.fill_(50.0)
+        head.bio_net[-1].weight.fill_(50.0)
+        head.bio_net[-1].bias.fill_(50.0)
 
     embedding = torch.randn(3, 8)
     categorical = torch.zeros((3, 1), dtype=torch.long)

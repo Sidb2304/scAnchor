@@ -180,6 +180,28 @@ Baselines (Harmony, scVI, scDisInFact) are run in their normal transductive
 mode — with full access to the held-out batch — for comparison. The goal is
 to approach transductive performance without needing the new batch's data.
 
+## Next steps
+
+Shipping now with the open problem above documented rather than waiting on
+these — they're the concrete roadmap, not a hidden gap:
+
+1. **Validate on a public dataset** (Jerber et al. 2021, below) — everything
+   so far is on one private dataset nobody outside this project can rerun.
+   This also doubles as a diagnostic: Jerber is much larger (>1M cells, 215
+   donors) than anything tested here, so it's a direct test of whether the
+   donor-retrieval/cell-type-purity gains that scaled cleanly with data
+   volume (see Current results) keep scaling, and whether the batch-mixing
+   trade-off is scale-limited or fundamental.
+2. **If the same trade-off reappears at that scale**, that's real evidence
+   it's architectural, not a tuning problem — try separate latent subspaces
+   for batch-invariant cell state vs. donor-preserved signal, instead of
+   forcing one shared embedding to satisfy both the adversarial and
+   donor-consistency objectives at once.
+3. **Baseline comparison against Harmony/scVI/scDisInFact in their normal
+   transductive mode** (the wrappers already exist in `evaluate/baselines.py`
+   but have never actually been run) — right now there's no comparison point
+   showing how this stacks up against existing tools on the same data.
+
 ## Reference panel (proposed)
 
 - General covariate-conditioned training signal: [scIB benchmark tasks](https://theislab.github.io/scib-reproducibility/)

@@ -88,8 +88,9 @@ training:
   mmd_weight: 20.0
   # MMD restricted to same-cell-type comparisons only, meant to fix the
   # cell-type-purity cost above without the composition confound global
-  # MMD has. Real sweep (README's Current results) found it doesn't work:
-  # worse donor retrieval alone, and worse cell-type purity when stacked on
+  # MMD has. Real sweep (README's Current results) found it doesn't work,
+  # even after fixing a real bandwidth bug in the first version: worse
+  # donor retrieval alone, and worse cell-type purity when stacked on
   # mmd_weight above -- the opposite of the goal. Off by default, kept for
   # comparison, not recommended.
   conditional_mmd_weight: 0.0

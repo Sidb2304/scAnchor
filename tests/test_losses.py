@@ -270,6 +270,58 @@ def test_class_conditional_mmd_loss_ignores_composition_confound_global_mmd_woul
     assert conditional_term.item() < global_term.item()
 
 
+def test_class_conditional_mmd_loss_uses_shared_bandwidth_not_per_label():
+    """The v0.4.0 fix: one bandwidth for all cell types, not one each.
+
+    Recomputing the median heuristic separately on each small per-cell-type
+    subset (the original implementation) gave a noisy, inconsistent length
+    scale from one cell type to the next -- a real sweep found this
+    destabilized training. Verify the fix directly: patching
+    `_median_heuristic_sigma` and counting calls should show it's invoked
+    once per `class_conditional_mmd_loss` call (the shared bandwidth), not
+    once per cell type present.
+    """
+    import scanchor.model.losses as losses_module
+
+    torch.manual_seed(0)
+    embeddings = torch.cat([torch.randn(10, 8), torch.randn(10, 8) + 3.0], dim=0)
+    batch_ids = torch.cat([torch.zeros(5, dtype=torch.long), torch.ones(5, dtype=torch.long)]).repeat(2)
+    labels = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+
+    call_count = 0
+    original = losses_module._median_heuristic_sigma
+
+    def counting_wrapper(x):
+        nonlocal call_count
+        call_count += 1
+        return original(x)
+
+    losses_module._median_heuristic_sigma = counting_wrapper
+    try:
+        losses_module.class_conditional_mmd_loss(embeddings, batch_ids, labels)
+    finally:
+        losses_module._median_heuristic_sigma = original
+
+    assert call_count == 1  # one shared bandwidth, not one per cell type (2 labels present)
+
+
+def test_class_conditional_mmd_loss_stable_with_imbalanced_label_sizes():
+    torch.manual_seed(0)
+    large_label = torch.randn(40, 8)  # 20 cells/batch, plenty of structure
+    small_label = torch.randn(4, 8) + 3.0  # right at the minimum threshold
+    embeddings = torch.cat([large_label, small_label], dim=0)
+    batch_ids = torch.cat([
+        torch.zeros(20, dtype=torch.long), torch.ones(20, dtype=torch.long),
+        torch.zeros(2, dtype=torch.long), torch.ones(2, dtype=torch.long),
+    ])
+    labels = torch.cat([torch.zeros(40, dtype=torch.long), torch.ones(4, dtype=torch.long)])
+
+    loss = class_conditional_mmd_loss(embeddings, batch_ids, labels)
+
+    assert torch.isfinite(loss)
+    assert loss.item() >= 0.0
+
+
 def test_correction_loss_conditional_mmd_term_inert_when_weight_zero():
     torch.manual_seed(0)
     original = torch.randn(12, 8)

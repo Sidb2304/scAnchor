@@ -126,7 +126,9 @@ def _median_heuristic_sigma(x: torch.Tensor) -> torch.Tensor:
         return off_diag.median().clamp(min=1e-6)
 
 
-def _pairwise_mmd_sum(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> tuple[torch.Tensor, int]:
+def _pairwise_mmd_sum(
+    embeddings: torch.Tensor, batch_ids: torch.Tensor, sigma: torch.Tensor | None = None
+) -> tuple[torch.Tensor, int]:
     """Sum of pairwise MMD^2 across every pair of batches present, and the pair count.
 
     Shared kernel math for both `mmd_loss` (global) and
@@ -134,12 +136,22 @@ def _pairwise_mmd_sum(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> tupl
     both compute the exact same RBF-MMD rather than risking the two drifting
     apart. Returns (0, 0) if fewer than 2 batches, or every batch present
     has <2 cells -- callers turn that into an inert 0 loss.
+
+    `sigma`: pass a precomputed bandwidth to use instead of the median
+    heuristic on this call's own `embeddings`. `class_conditional_mmd_loss`
+    uses this -- computing the bandwidth fresh on each small per-cell-type
+    subset gave a noisy, inconsistent length scale from one cell type (and
+    one minibatch) to the next, which a real sweep found destabilized
+    training rather than helping (see README). `mmd_loss` doesn't pass this,
+    so its behavior (and the dose-response numbers already validated
+    against it) is unchanged.
     """
     unique_batches = batch_ids.unique()
     if unique_batches.numel() < 2:
         return torch.zeros((), device=embeddings.device), 0
 
-    sigma = _median_heuristic_sigma(embeddings)
+    if sigma is None:
+        sigma = _median_heuristic_sigma(embeddings)
     total = torch.zeros((), device=embeddings.device)
     n_pairs = 0
     batch_list = unique_batches.tolist()
@@ -208,14 +220,25 @@ def class_conditional_mmd_loss(
     many cell types contributed one that minibatch. Returns 0 (inert) if no
     cell type had enough structure to compute anything, same pattern as
     `mmd_loss` and `donor_consistency_loss`.
+
+    Uses ONE bandwidth computed from all cells in this minibatch (same scale
+    `mmd_loss` itself would use), not a bandwidth recomputed per cell type.
+    The first version of this function recomputed the median heuristic on
+    each small per-cell-type subset -- a real sweep found that destabilized
+    training when weighted meaningfully (worse cell-type purity than global
+    MMD alone, the opposite of the goal) rather than fixing the composition
+    confound it targeted. A shared bandwidth keeps the length scale
+    consistent across cell types and across minibatches, which a per-subset
+    estimate on a handful of cells can't.
     """
+    sigma = _median_heuristic_sigma(embeddings)
     total = torch.zeros((), device=embeddings.device)
     n_pairs = 0
     for label in labels.unique():
         mask = labels == label
         if mask.sum() < 4:
             continue
-        label_total, label_n_pairs = _pairwise_mmd_sum(embeddings[mask], batch_ids[mask])
+        label_total, label_n_pairs = _pairwise_mmd_sum(embeddings[mask], batch_ids[mask], sigma=sigma)
         total = total + label_total
         n_pairs += label_n_pairs
 

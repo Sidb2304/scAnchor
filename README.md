@@ -266,12 +266,14 @@ above. Three real findings:
    at `mmd_weight=100` it's better than Harmony (0.177 vs. 0.188), the
    external baseline that motivated trying this mechanism in the first
    place.
-2. **`mmd_weight≈20` is a genuine joint sweet spot, not a cherry-pick.** At
-   that setting, all three metrics beat their pre-correction baseline
-   simultaneously (donor 0.594→0.906, batch-mixing 0.247→0.225, cell-type
-   0.375→0.383) — the first configuration in this project where that's true
-   for all three at once. No prior discriminator/split-latent config
-   achieved this; they all traded batch-mixing against the other two.
+2. **`mmd_weight≈20` is close to a joint sweet spot, not a cherry-pick — with
+   one caveat confirmed by the seed check below.** At that setting, donor
+   retrieval and batch-mixing both robustly beat their pre-correction
+   baseline (donor 0.594→0.906-0.922, batch-mixing 0.247→0.21-0.225 across 3
+   seeds). Cell-type purity is the exception: it beats baseline at seed 0
+   (0.375→0.383) but sits just *below* it at seed 1 (0.373) — a difference
+   small enough to call a wash, not a robust three-way win. Still no prior
+   discriminator/split-latent config got this close on all three at once.
 3. **The trade-off doesn't disappear, it just moves.** Past `mmd_weight≈20`,
    cell-type purity keeps dropping and crosses back below its own baseline
    by `mmd_weight=50` — the best batch-mixing numbers (50, 100) come at a
@@ -287,10 +289,39 @@ above. Three real findings:
    free additional batch-mixing improvement to be had by cranking the
    weight further, only a slow, flattening cost to cell-type purity.
 
+**Seed-robustness check: the dose-response curve holds, unlike the
+discriminator-capacity sweep in v0.1.** The entire sweep above was run at
+seed 0 only — the same situation that, for the discriminator-capacity sweep
+earlier in this project, turned out to hide a real seed-dependent collapse
+(one of three 128-unit seeds cratered donor retrieval to 0.06). Re-ran
+`mmd_weight` in `{0, 20, 100}` at seeds 1 and 2 to check:
+
+| `mmd_weight` | seed | donor retrieval after | batch-mixing after | cell-type purity after |
+|---|---|---|---|---|
+| 0 | 0 | 0.766 | 0.401 | 0.633 |
+| 0 | 1 | 0.688 | 0.405 | 0.627 |
+| 0 | 2 | 0.781 | 0.394 | 0.627 |
+| 20 | 0 | 0.906 | 0.225 | 0.383 |
+| 20 | 1 | 0.922 | 0.210 | 0.373 |
+| 20 | 2 | 0.906 | 0.212 | 0.382 |
+| 100 | 0 | 0.922 | 0.177 | 0.273 |
+| 100 | 1 | 0.969 | 0.175 | 0.272 |
+| 100 | 2 | 0.953 | 0.173 | 0.271 |
+
+No collapse, no reversal, no non-monotonic surprise at any seed — every
+metric stays within a tight band per weight (batch-mixing purity in
+particular varies by <0.015 across seeds at every weight tested). The
+mmd_weight=100-beats-Harmony result is real: all three seeds land at
+0.173-0.177, comfortably under Harmony's 0.188. The one caveat is the item
+2 correction above — cell-type purity at `mmd_weight=20` straddles its own
+baseline (above at seeds 0/2, marginally below at seed 1) rather than
+robustly beating it, so call that setting "donor+batch-mixing both win,
+cell-type roughly neutral" rather than "all three win."
+
 **Combining MMD with the adversarial term doesn't beat MMD alone — it moves
 along the same trade-off curve, not off of it.** Took `mmd_weight=20` (the
-joint sweet spot above, where all three metrics beat baseline) and added
-back a weakened adversarial term:
+best joint operating point above) and added back a weakened adversarial
+term:
 
 | `adversarial_weight` (with `mmd_weight=20`) | donor retrieval after | batch-mixing after | cell-type purity after |
 |---|---|---|---|
@@ -409,6 +440,18 @@ these — they're the concrete roadmap, not a hidden gap:
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
+3. **The default config still ships the inferior mechanism.**
+   `configs/default.yaml` currently defaults to `adversarial_weight: 1.0,
+   mmd_weight: 0.0` — i.e. out of the box, training uses the discriminator
+   approach now shown (with a seed-robust dose-response sweep, see above) to
+   regress batch-mixing, not the MMD loss that fixes it. Needs to change to
+   match what the README actually recommends.
+4. **Decide whether to keep or prune the adversarial discriminator /
+   split-latent code.** MMD now strictly outperforms both in every real
+   comparison run so far. Worth deciding whether to keep
+   `BatchDiscriminator`/`BatchAbsorber`/split-latent as a documented "tried,
+   didn't win" comparison path, or remove them to simplify the codebase now
+   that there's a clear winner.
 
 ## Reference panel
 

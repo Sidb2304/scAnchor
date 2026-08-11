@@ -22,15 +22,21 @@ model:
   embed_dim: 512          # must match the foundation model's output dim
   cat_embed_dim: 8
   covariate_dim: 32
-  hidden_dim: 256
+  # 128, not 256 -- this is the capacity the real MMD dose-response sweep
+  # (README's Current results) was actually validated at. Bumping this
+  # without re-validating would mean shipping an untested combination.
+  hidden_dim: 128
   # Caps ||delta|| at this fraction of ||embedding|| per cell. Without this,
-  # the adversarial objective below has a degenerate way to "win": blow up
+  # an adversarial objective has a degenerate way to "win": blow up
   # embedding magnitude rather than genuinely removing batch structure.
+  # Kept even though the discriminator is off by default below -- still
+  # relevant if you turn adversarial_weight back on.
   max_delta_ratio: 1.0
-  # Match or exceed this, not the 1-layer/64-unit default used in earlier
-  # experiments -- a discriminator too weak to detect batch structure a kNN
-  # metric picks up can reach equilibrium without removing that structure.
-  discriminator_hidden_dim: 256
+  # Only matters if adversarial_weight > 0 below (MMD, the default
+  # mechanism, doesn't use this at all). Kept at the capacity that reached
+  # equilibrium in earlier experiments, not the 1-layer/64-unit default
+  # that was too weak to detect what a kNN metric picks up.
+  discriminator_hidden_dim: 128
   # Size of the split-off z_batch latent (see CorrectionHead docstring) that
   # absorbs batch-predictive variance instead of forcing it out of the main
   # corrected embedding. Small on purpose -- it only needs to carry batch
@@ -44,39 +50,42 @@ training:
   # donor retrieval worse, which turned out to be unseeded run-to-run noise).
   seed: 0
   batch_size: 512
-  epochs: 50
+  epochs: 30    # matches what the MMD dose-response sweep was actually run at
   learning_rate: 1.0e-3
   contrastive_temperature: 0.1
   contrastive_weight: 1.0
   variance_weight: 1.0
   donor_weight: 1.0
-  # Adversarial batch discriminator (gradient-reversal): pushes the
-  # correction head to make batch identity harder to predict, rather than
-  # relying only on the "pull together" contrastive/donor terms above.
+  # Adversarial batch discriminator (gradient-reversal): the ORIGINAL
+  # batch-mixing mechanism, kept in the code and off by default. A real,
+  # seed-checked sweep (README's Current results) found it consistently
+  # regresses batch-mixing purity below the pre-correction baseline, and
+  # that combining it with the MMD loss below doesn't beat MMD alone --
+  # it just re-traces the same trade-off curve at a worse point. Set > 0
+  # only if you're deliberately reproducing/comparing against that result.
   # adversarial_lambda ramps 0 -> this value over training (Ganin & Lempitsky
   # schedule) rather than applying full strength from epoch 0 -- a fixed
   # lambda=1.0 from the start caused runaway divergence on real data
   # (adversarial loss 2.07 -> 30,224 over 30 epochs, everything collapsed).
-  adversarial_weight: 1.0
+  adversarial_weight: 0.0
   adversarial_lambda: 1.0
-  # Weight on the BatchAbsorber term -- trained normally (no GRL) to predict
-  # batch from z_batch, encouraging it to actually absorb batch-predictive
-  # variance so the adversarial term above has less to fight over on the
-  # main corrected embedding.
-  absorption_weight: 1.0
+  # Weight on the BatchAbsorber term (split-latent architecture) -- also
+  # off by default. Two real attempts at this (README's Current results)
+  # never beat the simple single-embedding architecture on batch-mixing,
+  # the one thing it was built to fix. Kept for comparison, not recommended.
+  absorption_weight: 0.0
   # Maximum Mean Discrepancy between batches' corrected-embedding
-  # distributions -- a non-adversarial alternative to the discriminator
-  # above (no min-max dynamics, no learnable parameters). Motivated by
-  # Harmony's success on this exact batch-mixing regression via the same
-  # kind of distributional-alignment mechanism. A real dose-response sweep
-  # (README's Current results) found ~20 as a joint sweet spot where donor
-  # retrieval/batch-mixing/cell-type purity all beat baseline at once, and
-  # ~100 as the ceiling for batch-mixing improvement (plateaus past that).
-  # Combining this with adversarial_weight > 0 did not beat MMD alone in
-  # that sweep -- pick a point on this weight's curve, don't add the
-  # discriminator back on top of it. Off by default (0.0) pending
-  # validation beyond the one dataset that sweep used.
-  mmd_weight: 0.0
+  # distributions -- the DEFAULT batch-mixing mechanism as of this config.
+  # Non-adversarial (no min-max dynamics, no learnable parameters),
+  # motivated by Harmony's success on this exact regression via the same
+  # kind of distributional-alignment mechanism, and validated with a real,
+  # seed-checked dose-response sweep (README's Current results): 20 is a
+  # joint sweet spot (donor retrieval and batch-mixing both robustly beat
+  # baseline; cell-type purity roughly neutral), 100 is the ceiling for
+  # batch-mixing improvement specifically (better than Harmony, but at a
+  # real cost to cell-type purity) -- raise toward 100 if batch-mixing is
+  # what you care about most, keep at 20 for the more balanced trade-off.
+  mmd_weight: 20.0
   grad_clip_norm: 5.0
   min_variance_ratio: 0.8
   checkpoint_out: checkpoints/correction_head.pt

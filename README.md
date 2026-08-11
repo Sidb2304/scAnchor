@@ -33,12 +33,16 @@ everything you've already processed.
 ## Status
 
 Validated end-to-end against real data, with a partial, honestly-reported
-result — not a finished method. The default config (adversarial
-discriminator) still regresses batch-mixing purity; a newer MMD-based loss
-(off by default, `mmd_weight: 0.0`) fixes that regression and, at higher
-weights, beats the Harmony baseline on the same metric — but trades away
-cell-type purity in exchange, and hasn't been validated on any dataset
-besides the one below. See **Current results** before relying on this for
+result — not a finished method. The default config now uses the MMD loss
+(`mmd_weight: 20`, `adversarial_weight: 0`, `absorption_weight: 0`) rather
+than the original adversarial discriminator, which a real, seed-checked
+sweep showed consistently regresses batch-mixing purity. MMD fixes that
+regression and, at higher weights, beats the Harmony baseline on the same
+metric — but trades away cell-type purity in exchange, and hasn't been
+validated on any dataset besides the one below. The adversarial
+discriminator and split-latent architecture are still in the codebase
+(`adversarial_weight`/`absorption_weight` > 0) for comparison, not because
+either is recommended. See **Current results** before relying on this for
 anything beyond experimentation.
 
 ## Current results
@@ -440,18 +444,6 @@ these — they're the concrete roadmap, not a hidden gap:
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
-3. **The default config still ships the inferior mechanism.**
-   `configs/default.yaml` currently defaults to `adversarial_weight: 1.0,
-   mmd_weight: 0.0` — i.e. out of the box, training uses the discriminator
-   approach now shown (with a seed-robust dose-response sweep, see above) to
-   regress batch-mixing, not the MMD loss that fixes it. Needs to change to
-   match what the README actually recommends.
-4. **Decide whether to keep or prune the adversarial discriminator /
-   split-latent code.** MMD now strictly outperforms both in every real
-   comparison run so far. Worth deciding whether to keep
-   `BatchDiscriminator`/`BatchAbsorber`/split-latent as a documented "tried,
-   didn't win" comparison path, or remove them to simplify the codebase now
-   that there's a clear winner.
 
 ## Reference panel
 

@@ -346,8 +346,66 @@ found in this project so far** — pick a point on its curve (weight≈20 for
 all-three-beat-baseline, weight≈100 for best achievable batch-mixing) rather
 than adding the discriminator back on top of it.
 
-Not yet tested: MMD on Jerber or the full 81k-cell Levy dataset — see Next
-steps.
+Not yet tested at this point: MMD on Jerber or the full 81k-cell Levy
+dataset — see Next steps.
+
+**v0.3.0: class-conditional MMD — a real, well-motivated hypothesis that
+real data refutes.** Global MMD can't tell "batch structure" apart from
+"these batches just happen to have different cell-type composition," so at
+high weight it may pull cell types together as readily as it removes real
+batch structure — a plausible explanation for the cell-type-purity cost
+documented above. `class_conditional_mmd_loss()` (see `model/losses.py`)
+tests the fix directly: compute MMD only between same-cell-type cells
+across batches, never mixing cell types into the same kernel comparison, so
+it can only touch batch structure, not composition. Swept
+`conditional_mmd_weight` both alone and stacked on top of the current
+default (`mmd_weight=20`), seed 0, real 18.2k-cell data:
+
+| config | donor retrieval after | batch-mixing after | cell-type purity after |
+|---|---|---|---|
+| before correction | 0.594 | 0.247 | 0.375 |
+| `mmd_weight=20` alone (current default) | 0.906 | 0.225 | 0.383 |
+| `conditional_mmd_weight=5` alone | 0.516 (worse than baseline) | 0.304 (worse) | 0.481 |
+| `conditional_mmd_weight=20` alone | 0.625 | 0.212 | 0.324 |
+| `conditional_mmd_weight=50` alone | 0.656 | 0.199 | 0.310 |
+| `conditional_mmd_weight=100` alone | 0.781 | 0.202 | 0.303 |
+| `mmd_weight=20` + `conditional_mmd_weight=5` | 0.953 | 0.234 | 0.388 |
+| `mmd_weight=20` + `conditional_mmd_weight=20` | 0.766 | 0.185 | 0.288 (worse than MMD alone) |
+| `mmd_weight=20` + `conditional_mmd_weight=50` | 0.875 | 0.189 | 0.284 (worse than MMD alone) |
+
+**The hypothesis doesn't hold up.** Two real findings, neither the one
+hoped for:
+1. Conditional MMD alone is dramatically worse at donor retrieval than
+   global MMD at every matched weight (0.52-0.78 vs. global's 0.91-0.92) —
+   at low weight it's even worse than doing nothing (0.516 vs. 0.594
+   baseline). It's not a drop-in replacement for the global term.
+2. Stacking it on top of the current default does *not* recover cell-type
+   purity as intended — at `conditional_mmd_weight=20` or `50` it makes
+   cell-type purity *worse* than `mmd_weight=20` alone (0.28-0.29 vs.
+   0.383), the opposite of the goal. Only `conditional_mmd_weight=5` looks
+   like a small win on all three metrics at once, but the size of that
+   effect (donor +0.05, cell-type +0.005) is well within the seed-to-seed
+   noise band already established for MMD alone (±0.02-0.05 across seeds) —
+   not something to trust as real without a seed check, and small enough
+   that a seed check isn't a priority use of compute right now.
+
+**A plausible mechanistic reason, not just a number.** The conditional
+term's own loss value ran far higher than the global term's at comparable
+weights (`total` loss reaching ~22 vs. ~12-16 for other configs at
+`mmd_weight=20`+`conditional_mmd_weight=50`) — restricting each MMD
+computation to one cell type at a time means smaller per-group sample
+sizes and inconsistent cell-type representation from one minibatch to the
+next, both of which make for a noisier, higher-magnitude gradient signal
+than the global term's. Combining that with a single shared Adam optimizer
+across the whole model plausibly lets it destabilize the other loss terms
+rather than complement them.
+
+**Not adopted.** `configs/default.yaml` stays at `mmd_weight=20,
+conditional_mmd_weight=0` — global MMD alone remains the better mechanism
+found in this project. `class_conditional_mmd_loss` and
+`conditional_mmd_weight` stay in the codebase (tested, wired through
+training) as a documented "tried, didn't win" path, same treatment as the
+adversarial discriminator and split-latent architecture.
 
 **scVI baseline: a genuine mechanism-level trade-off, not a win or a loss.**
 Once the `mudata`/`anndata` import conflict was resolved (upgrading
@@ -444,6 +502,13 @@ these — they're the concrete roadmap, not a hidden gap:
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
+3. **If revisiting class-conditional MMD, fix the noisy-gradient problem
+   first, don't just re-sweep weights.** The likely reason it destabilized
+   training rather than helping (see Current results) is a scale/variance
+   mismatch with the global term, not a wrong idea in principle — worth
+   trying a separate learning rate for that term, or normalizing it by its
+   own per-minibatch pair count more aggressively, before concluding the
+   underlying hypothesis (composition confound in global MMD) is wrong.
 
 ## Reference panel
 

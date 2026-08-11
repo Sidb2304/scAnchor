@@ -126,6 +126,40 @@ def _median_heuristic_sigma(x: torch.Tensor) -> torch.Tensor:
         return off_diag.median().clamp(min=1e-6)
 
 
+def _pairwise_mmd_sum(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> tuple[torch.Tensor, int]:
+    """Sum of pairwise MMD^2 across every pair of batches present, and the pair count.
+
+    Shared kernel math for both `mmd_loss` (global) and
+    `class_conditional_mmd_loss` (per cell type) below -- factored out so
+    both compute the exact same RBF-MMD rather than risking the two drifting
+    apart. Returns (0, 0) if fewer than 2 batches, or every batch present
+    has <2 cells -- callers turn that into an inert 0 loss.
+    """
+    unique_batches = batch_ids.unique()
+    if unique_batches.numel() < 2:
+        return torch.zeros((), device=embeddings.device), 0
+
+    sigma = _median_heuristic_sigma(embeddings)
+    total = torch.zeros((), device=embeddings.device)
+    n_pairs = 0
+    batch_list = unique_batches.tolist()
+    for i in range(len(batch_list)):
+        x = embeddings[batch_ids == batch_list[i]]
+        if x.shape[0] < 2:
+            continue
+        for j in range(i + 1, len(batch_list)):
+            y = embeddings[batch_ids == batch_list[j]]
+            if y.shape[0] < 2:
+                continue
+            k_xx = torch.exp(-torch.cdist(x, x, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            k_yy = torch.exp(-torch.cdist(y, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            k_xy = torch.exp(-torch.cdist(x, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            total = total + (k_xx + k_yy - 2 * k_xy)
+            n_pairs += 1
+
+    return total, n_pairs
+
+
 def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
     """Maximum Mean Discrepancy between every pair of batches in this minibatch.
 
@@ -145,27 +179,45 @@ def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
     anything meaningful; returns 0 (inert) otherwise, same pattern as
     donor_consistency_loss.
     """
-    unique_batches = batch_ids.unique()
-    if unique_batches.numel() < 2:
+    total, n_pairs = _pairwise_mmd_sum(embeddings, batch_ids)
+    if n_pairs == 0:
         return torch.zeros((), device=embeddings.device)
+    return total / n_pairs
 
-    sigma = _median_heuristic_sigma(embeddings)
+
+def class_conditional_mmd_loss(
+    embeddings: torch.Tensor, batch_ids: torch.Tensor, labels: torch.Tensor
+) -> torch.Tensor:
+    """MMD computed within each cell type separately, not globally.
+
+    Global `mmd_loss` matches each batch's overall embedding distribution to
+    every other batch's -- it has no way to tell "batch structure" apart
+    from "these batches just happen to have different cell-type
+    composition," so at high weight it can pull cell types together as
+    readily as it removes real batch structure (this project's real
+    dose-response sweep found exactly that: cell-type purity degrades
+    monotonically as `mmd_weight` increases, see README). Pooling only
+    same-cell-type cells across batches before computing MMD targets batch
+    structure specifically and leaves cross-cell-type structure alone.
+
+    Skips any cell type with fewer than 4 cells in this minibatch (not
+    enough to plausibly split across >=2 batches with >=2 cells each) and
+    pools the pairwise MMD sum/count across every cell type that did have
+    enough structure, rather than averaging per-cell-type averages -- this
+    weights each valid (cell type, batch pair) equally regardless of how
+    many cell types contributed one that minibatch. Returns 0 (inert) if no
+    cell type had enough structure to compute anything, same pattern as
+    `mmd_loss` and `donor_consistency_loss`.
+    """
     total = torch.zeros((), device=embeddings.device)
     n_pairs = 0
-    batch_list = unique_batches.tolist()
-    for i in range(len(batch_list)):
-        x = embeddings[batch_ids == batch_list[i]]
-        if x.shape[0] < 2:
+    for label in labels.unique():
+        mask = labels == label
+        if mask.sum() < 4:
             continue
-        for j in range(i + 1, len(batch_list)):
-            y = embeddings[batch_ids == batch_list[j]]
-            if y.shape[0] < 2:
-                continue
-            k_xx = torch.exp(-torch.cdist(x, x, p=2).pow(2) / (2 * sigma.pow(2))).mean()
-            k_yy = torch.exp(-torch.cdist(y, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
-            k_xy = torch.exp(-torch.cdist(x, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
-            total = total + (k_xx + k_yy - 2 * k_xy)
-            n_pairs += 1
+        label_total, label_n_pairs = _pairwise_mmd_sum(embeddings[mask], batch_ids[mask])
+        total = total + label_total
+        n_pairs += label_n_pairs
 
     if n_pairs == 0:
         return torch.zeros((), device=embeddings.device)
@@ -200,6 +252,7 @@ def correction_loss(
     adversarial_weight: float = 1.0,
     absorption_weight: float = 1.0,
     mmd_weight: float = 0.0,
+    conditional_mmd_weight: float = 0.0,
     temperature: float = 0.1,
     min_variance_ratio: float = 0.8,
 ) -> tuple[torch.Tensor, dict[str, float]]:
@@ -231,6 +284,11 @@ def correction_loss(
         mmd_term = mmd_loss(corrected, batch_ids)
         total = total + mmd_weight * mmd_term
 
+    conditional_mmd_term = torch.zeros((), device=corrected.device)
+    if batch_ids is not None:
+        conditional_mmd_term = class_conditional_mmd_loss(corrected, batch_ids, labels)
+        total = total + conditional_mmd_weight * conditional_mmd_term
+
     return total, {
         "contrastive": contrastive.item(),
         "variance_penalty": variance_penalty.item(),
@@ -238,5 +296,6 @@ def correction_loss(
         "adversarial_batch": adversarial_term.item(),
         "batch_absorption": absorption_term.item(),
         "mmd": mmd_term.item(),
+        "conditional_mmd": conditional_mmd_term.item(),
         "total": total.item(),
     }

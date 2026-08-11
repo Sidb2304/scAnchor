@@ -3,6 +3,7 @@ import torch.nn.functional as F
 
 from scanchor.model.losses import (
     adversarial_batch_loss,
+    class_conditional_mmd_loss,
     correction_loss,
     donor_consistency_loss,
     mmd_loss,
@@ -52,12 +53,13 @@ def test_correction_loss_combines_both_terms():
     assert torch.isfinite(total)
     assert set(metrics.keys()) == {
         "contrastive", "variance_penalty", "donor_consistency",
-        "adversarial_batch", "batch_absorption", "mmd", "total",
+        "adversarial_batch", "batch_absorption", "mmd", "conditional_mmd", "total",
     }
     assert metrics["donor_consistency"] == 0.0  # no donor_ids passed -> term is inert
     assert metrics["adversarial_batch"] == 0.0  # no batch_logits passed -> term is inert
     assert metrics["batch_absorption"] == 0.0  # no absorber_logits passed -> term is inert
     assert metrics["mmd"] == 0.0  # no batch_ids passed -> term is inert
+    assert metrics["conditional_mmd"] == 0.0  # no batch_ids passed -> term is inert
 
 
 def test_donor_consistency_loss_zero_when_no_cross_batch_positive():
@@ -209,3 +211,82 @@ def test_correction_loss_mmd_term_inert_when_weight_zero():
     assert metrics_no_mmd["mmd"] == metrics_with_mmd["mmd"]  # same value computed either way
     assert metrics_with_mmd["mmd"] > 0.0
     assert total_with_mmd.item() > total_no_mmd.item()  # weight 1 pulls it into total, weight 0 doesn't
+
+
+def test_class_conditional_mmd_loss_zero_with_single_batch():
+    embeddings = torch.randn(10, 8)
+    batch_ids = torch.zeros(10, dtype=torch.long)
+    labels = torch.randint(0, 2, (10,))
+
+    loss = class_conditional_mmd_loss(embeddings, batch_ids, labels)
+
+    assert loss.item() == 0.0
+
+
+def test_class_conditional_mmd_loss_finite_and_positive_when_shifted_within_label():
+    torch.manual_seed(0)
+    x = torch.randn(10, 8)
+    y = torch.randn(10, 8) + 5.0
+    embeddings = torch.cat([x, y], dim=0)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+    labels = torch.zeros(20, dtype=torch.long)  # single cell type -- same as plain mmd_loss here
+
+    loss = class_conditional_mmd_loss(embeddings, batch_ids, labels)
+
+    assert torch.isfinite(loss)
+    assert loss.item() > 0.0
+
+
+def test_class_conditional_mmd_loss_ignores_composition_confound_global_mmd_would_see():
+    """The exact scenario class-conditional MMD is meant to fix.
+
+    Two batches with different cell-type *composition* (batch 0 is mostly
+    label 0, batch 1 is mostly label 1) but embeddings are drawn from the
+    identical distribution within each label regardless of batch -- there
+    is no real batch effect, only a composition difference. Global mmd_loss
+    picks up the composition difference as if it were batch structure;
+    class_conditional_mmd_loss, restricted to same-label comparisons only,
+    should not.
+    """
+    torch.manual_seed(0)
+    label0_batch0 = torch.randn(20, 8)
+    label0_batch1 = torch.randn(4, 8)  # same distribution, same label, different batch
+    label1_batch0 = torch.randn(4, 8) + 8.0  # different label -> different distribution
+    label1_batch1 = torch.randn(20, 8) + 8.0  # same distribution, same label, different batch
+
+    embeddings = torch.cat([label0_batch0, label0_batch1, label1_batch0, label1_batch1], dim=0)
+    batch_ids = torch.cat([
+        torch.zeros(20, dtype=torch.long), torch.ones(4, dtype=torch.long),
+        torch.zeros(4, dtype=torch.long), torch.ones(20, dtype=torch.long),
+    ])
+    labels = torch.cat([
+        torch.zeros(20, dtype=torch.long), torch.zeros(4, dtype=torch.long),
+        torch.ones(4, dtype=torch.long), torch.ones(20, dtype=torch.long),
+    ])
+
+    global_term = mmd_loss(embeddings, batch_ids)
+    conditional_term = class_conditional_mmd_loss(embeddings, batch_ids, labels)
+
+    assert conditional_term.item() < global_term.item()
+
+
+def test_correction_loss_conditional_mmd_term_inert_when_weight_zero():
+    torch.manual_seed(0)
+    original = torch.randn(12, 8)
+    corrected = original + 5.0 * torch.randn(12, 8)
+    # 2 labels x 2 batches x 3 cells each -- guarantees every label has
+    # enough same-label cells crossing both batches for the term to be
+    # provably nonzero, not just "probably" with random labels.
+    labels = torch.tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1])
+    batch_ids = torch.tensor([0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1])
+
+    total_no_cmmd, metrics_no_cmmd = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, conditional_mmd_weight=0.0
+    )
+    total_with_cmmd, metrics_with_cmmd = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, conditional_mmd_weight=1.0
+    )
+
+    assert metrics_no_cmmd["conditional_mmd"] == metrics_with_cmmd["conditional_mmd"]
+    assert metrics_with_cmmd["conditional_mmd"] > 0.0
+    assert total_with_cmmd.item() > total_no_cmmd.item()

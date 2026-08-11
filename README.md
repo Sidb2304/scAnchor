@@ -165,15 +165,53 @@ sign of dilution, a sign of no exploitable signal. Batch-mixing still
 regressed after correction here too, consistent with every other experiment
 in this project regardless of dataset.
 
-**Honest interpretation**: the donor-signal-preservation result from the
-Levy astrocyte data doesn't generalize unqualified to this dataset/timepoint.
-The most likely explanation is biological, not architectural: day-11 iPSC-
-derived midbrain progenitors are very early and transcriptionally
-homogeneous, where donor/genotype signal may simply be weaker relative to
-shared early-developmental programs than in Levy's more mature,
-differentiated astrocytes. Jerber's day-30 and day-52 timepoints (later,
-more differentiated dopaminergic neurons) are a natural next test of that
-hypothesis — not yet run, see Next steps.
+**Day-11 interpretation at the time**: the most likely explanation seemed
+biological — day-11 iPSC-derived midbrain progenitors are very early and
+transcriptionally homogeneous, where donor/genotype signal may simply be
+weaker relative to shared early-developmental programs than in Levy's more
+mature, differentiated astrocytes. Jerber's day-30 timepoint (later, more
+differentiated dopaminergic neurons) was the natural next test of that
+hypothesis.
+
+**Day-30 result: the homogeneity hypothesis is wrong. The real cause is
+structural, not biological, and it's the same at every Jerber timepoint.**
+Ran the current validated default (`mmd_weight=20`, not the adversarial-only
+config day-11 used before MMD existed) on Jerber's day-30 timepoint
+(250,923 cells, 175 donors, 12 pools — downloaded fresh from the same
+Zenodo record, day30.h5.zip, ~3.1GB compressed / 11.3GB uncompressed):
+
+| | donor retrieval, before → after |
+|---|---|
+| Day-11 (162 training donors) | 0.0 → 0.0 |
+| Day-30 (159 training donors) | 0.0 → 0.038 |
+
+Day-30 donor retrieval is still, for practical purposes, zero — nowhere
+close to Levy's 0.594 → 0.906. That alone would be consistent with either
+explanation (homogeneity or structure). What settles it: **day-30's donor
+crossing is 25 crossed donors out of 175 total** — essentially identical to
+day-11's 25 crossed out of 177 — despite day-30 being a genuinely more
+differentiated, more diverse cell population (pre-correction cell-type kNN
+purity 0.821 at day-30, vs. day-11's ~96%-two-progenitor-states
+near-monoculture). If homogeneity were the explanation, day-30's much more
+distinct cell states should have given the donor-consistency term more to
+work with. It didn't, and the reason is visible in the numbers: **the same
+~25 donors are crossed across pools at both timepoints** — this is the same
+donor cohort profiled twice, with the same pooling design, so the sparse
+crossing is a fixed property of Jerber's whole experimental design, not
+something that changes with differentiation stage. Batch-mixing and
+cell-type purity both still improved with correction here (0.392 → 0.356
+and 0.821 → 0.842 respectively) — the MMD mechanism itself generalizes
+fine to a second, very different real dataset; it's specifically the
+donor-consistency objective that has no exploitable signal on Jerber,
+regardless of timepoint.
+
+**Day-52 is now low priority, not the natural next test it looked like
+before this result.** It almost certainly has the same donor/pool cohort
+structure as day-11 and day-30 (same study, same donors, same pooling
+design) — running it would very likely just reconfirm sparse crossing a
+third time at real cost (day52.h5.zip is ~7.1GB compressed, noticeably
+bigger than day-11/day-30's ~3.1GB each). Not worth it unless something
+else about day-52 specifically suggests otherwise.
 
 **Split-latent architecture attempt: two real tries, neither beat the simple
 baseline.** Given the batch-mixing regression above is architectural, not a
@@ -346,8 +384,8 @@ found in this project so far** — pick a point on its curve (weight≈20 for
 all-three-beat-baseline, weight≈100 for best achievable batch-mixing) rather
 than adding the discriminator back on top of it.
 
-Not yet tested at this point: MMD on Jerber or the full 81k-cell Levy
-dataset — see Next steps.
+Not yet tested at this point: MMD on the full 81k-cell Levy dataset — see
+Next steps. (MMD on Jerber is tested below, in the day-30 discussion.)
 
 **Class-conditional MMD — a real, well-motivated hypothesis that real data
 refutes, even after fixing a real bug in it.** Global MMD can't tell "batch
@@ -531,13 +569,7 @@ to approach transductive performance without needing the new batch's data.
 Shipping now with the open problems above documented rather than waiting on
 these — they're the concrete roadmap, not a hidden gap:
 
-1. **Jerber's day-30 and day-52 timepoints** — later, more differentiated
-   dopaminergic neurons, as a direct test of the "day-11 progenitors are just
-   too homogeneous" hypothesis above. If donor retrieval works there the way
-   it did on Levy's mature astrocytes, that's a real, useful finding about
-   *when* this method is applicable (differentiated cell states, not early
-   progenitors) rather than a blanket failure.
-2. **Full ~81k-cell Levy dataset** — the discriminator-capacity sweep above
+1. **Full ~81k-cell Levy dataset** — the discriminator-capacity sweep above
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.

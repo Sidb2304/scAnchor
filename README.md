@@ -593,13 +593,35 @@ phenomenon here, not nothing — every categorical covariate is forced to
 UNK in both directions, so whatever's happening comes from the continuous
 covariates and the embedding itself, not anything study-specific — but
 it's direction-dependent, not a general "this generalizes across studies"
-result. A plausible reason for the asymmetry: Jerber's training subsample
-(7,252 cells, sparse donor crossing, dopaminergic progenitors) is smaller
-and structurally sparser than Levy's reference panel (18,238 cells, denser
-donor×batch crossing, mature astrocytes) — a correction function learned
-from the sparser, smaller source may simply be less well-calibrated when
-applied to a larger, more different target. Not yet tested rigorously
-(single seed, one pair) — see Next steps.
+result.
+
+**Ruled out source-dataset size as the driver.** The initial hypothesis —
+Jerber's training subsample (7,252 cells) being smaller than Levy's
+reference panel (18,238 cells) makes its correction function less
+well-calibrated for cross-study transfer — is testable in isolation:
+subsample Levy down to Jerber's exact scale (7,252 cells) while keeping
+Levy's own dense 8-donor/8-batch crossing intact (donor-crossing density
+can't be matched the other way; Levy only has 8 donors, all densely
+crossed, so there's no way to reproduce Jerber's "162 total, 25 crossed"
+sparsity from it), train a head on that, and compare its zero-shot
+transfer to Jerber against the full 18.2k-cell head's:
+
+| Levy source size | batch-mixing before → after (on Jerber) |
+|---|---|
+| 18,238 cells (full) | 0.392 → 0.383 |
+| 7,252 cells (matched to Jerber's scale) | 0.392 → 0.387 |
+
+Both sizes transfer to Jerber in the *same direction* (batch-mixing
+improves), just with the smaller source giving a somewhat weaker effect
+(Δ −0.006 vs. −0.010) — nothing like Jerber→Levy's sign-flipped result
+(Δ +0.011, worse than doing nothing). Matching Jerber's exact cell count
+didn't reproduce Jerber's transfer behavior, which rules out **source
+size alone** as the explanation. The two remaining candidates — Jerber's
+sparse donor-crossing structure, and something about the *direction*
+of biological maturity (progenitor→mature vs. mature→progenitor) —
+weren't isolated by this test and would need a source dataset with Levy's
+scale but Jerber-like crossing sparsity, or a third, unrelated dataset, to
+tell apart. Single seed, one dataset pair — see Next steps.
 
 ## Next steps
 
@@ -610,14 +632,16 @@ these — they're the concrete roadmap, not a hidden gap:
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
-2. **Understand the cross-study transfer asymmetry.** One dataset pair, one
-   seed, both directions now tested — and they disagree (Levy→Jerber
-   helps, Jerber→Levy hurts batch-mixing). Worth checking whether that's
-   about source-dataset size/crossing-density (the leading hypothesis
-   above) by testing transfer from a source dataset of comparable size and
-   crossing density to Levy, and whether it's seed-robust like the
-   within-study MMD sweep — before drawing any general conclusion about
-   cross-study transfer either way.
+2. **Isolate the real driver of the cross-study transfer asymmetry.**
+   Source-dataset size is ruled out (see above) — a Levy source matched to
+   Jerber's exact cell count still transferred in the *same* direction as
+   the full-size source, just weaker. What's left: Jerber's sparse
+   donor-crossing structure (162 total donors, 25 crossed — can't be
+   reproduced from Levy's 8 densely-crossed donors, needs either a
+   differently-structured source dataset or an artificially-sparsified one),
+   and the direction of biological maturity (progenitor→mature vs.
+   mature→progenitor, which the two-dataset design also can't separate from
+   "which study is which"). Also still single-seed, one dataset pair.
 
 ## Reference panel
 

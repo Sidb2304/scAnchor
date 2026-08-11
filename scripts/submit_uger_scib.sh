@@ -77,7 +77,33 @@ done
 mkdir -p "$DATA_CACHE_DIR" "$OUT_DIR"
 # --- end preflight check ---
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
+# Batch jobs don't inherit the interactive login shell's setup (the
+# `use`/`.bashrc` machinery that makes `conda` resolve on PATH when you're
+# typed in manually) -- `conda info --base` fails silently here because
+# `conda` itself isn't found yet, a real bug hit running this for real.
+# Known-good path for this cluster's base anaconda install (confirmed from
+# an interactive session, see conda_base candidates below); falls back to
+# `conda info --base` in case `conda` IS somehow already on PATH, and fails
+# loudly with both attempts shown rather than a confusing "command not
+# found" three lines later if neither works.
+CONDA_SH=""
+for conda_base in \
+    "/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10" \
+    "$(conda info --base 2>/dev/null || true)"
+do
+    if [[ -n "$conda_base" && -e "${conda_base}/etc/profile.d/conda.sh" ]]; then
+        CONDA_SH="${conda_base}/etc/profile.d/conda.sh"
+        break
+    fi
+done
+if [[ -z "$CONDA_SH" ]]; then
+    echo "ERROR: couldn't find conda.sh -- tried the hardcoded cluster path and" >&2
+    echo "'conda info --base'. Run 'which conda' and 'conda info --base' in an" >&2
+    echo "interactive session on this cluster, then hardcode the correct" >&2
+    echo "etc/profile.d/conda.sh path into the conda_base list above." >&2
+    exit 1
+fi
+source "$CONDA_SH"
 conda activate "$CONDA_ENV_PATH"
 
 cd "$REPO_DIR"

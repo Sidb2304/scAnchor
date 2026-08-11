@@ -564,6 +564,39 @@ Baselines (Harmony, scVI, scDisInFact) are run in their normal transductive
 mode — with full access to the held-out batch — for comparison. The goal is
 to approach transductive performance without needing the new batch's data.
 
+**True cross-study zero-shot transfer: the sharpest test of the inductive
+claim, and it holds up (modestly).** Every generalization test above holds
+out a batch *within the same study* — Levy's leave-one-batch-out, Jerber's
+own leave-one-pool-out. Neither tests the thing this project is actually
+built around: a correction head trained on one study, applied with **no
+retraining** to a completely different one. Took the Levy-trained head
+(`mmd_weight=20`, the shipped default) and applied it directly to Jerber's
+day-30 embeddings — every one of Jerber's 12 pools is a string Levy's
+vocab has never seen, so 100% of cells hit the UNK categorical embedding
+(verified directly, not assumed). Evaluated purely on Jerber's own
+pool/cell-type structure, not mixed with Levy cells into one metric —
+the question is whether a Levy-trained correction function does anything
+sensible to a dataset it's never seen, not how similar the two studies are:
+
+| | batch-mixing purity | cell-type kNN purity |
+|---|---|---|
+| before correction | 0.392 | 0.821 |
+| zero-shot (Levy-trained, never saw Jerber) | 0.383 | 0.820 |
+| in-distribution (trained *on* Jerber itself) | 0.356 | 0.842 |
+
+The zero-shot head recovers roughly a quarter of the in-distribution
+batch-mixing improvement (Δ −0.009 vs. −0.036) with cell-type purity
+essentially unchanged (not damaged) — a real, if modest, positive result.
+With every categorical covariate forced to UNK, whatever signal the head
+is acting on here has to come from the continuous covariates
+(`total_counts`, `pct_counts_mt`) and the embedding itself, not anything
+specific to Levy's particular batch IDs — which is exactly the kind of
+transfer the covariate-conditioning design was meant to enable. Not a
+strong result (in-distribution training clearly still helps a lot more),
+but a genuinely novel one: the first evidence this project has that the
+learned correction generalizes across studies, not just across batches
+within one study.
+
 ## Next steps
 
 Shipping now with the open problems above documented rather than waiting on
@@ -573,6 +606,12 @@ these — they're the concrete roadmap, not a hidden gap:
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
+2. **Push the cross-study transfer result further.** One direction, one
+   dataset pair, one seed. Worth checking the reverse direction (Jerber-
+   trained head applied to Levy), whether it holds at other Jerber
+   timepoints, and whether it's seed-robust like the within-study MMD
+   sweep — before treating "generalizes across studies" as anything more
+   than a first, promising data point.
 
 ## Reference panel
 

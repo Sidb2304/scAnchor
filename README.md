@@ -247,6 +247,8 @@ isolate MMD's effect on its own:
 | **20** | **0.906** | **0.225 (better)** | **0.383 (better)** |
 | 50 | 0.891 | 0.181 (better, ~matches Harmony) | 0.299 (worse) |
 | 100 | 0.922 | **0.177 (better than Harmony)** | 0.273 (worse) |
+| 200 | 0.922 | 0.177 (flat vs. 100) | 0.267 |
+| 500 | 0.922 | 0.177 (flat vs. 100/200) | 0.264 |
 
 (baseline before correction, every row: donor retrieval 0.594, batch-mixing
 0.247, cell-type purity 0.375)
@@ -276,9 +278,41 @@ above. Three real findings:
    real cost to within-cell-type structure, the same donor-vs-batch tension
    seen everywhere else in this project, just shifted to a better operating
    point on the curve than the adversarial mechanism ever reached.
+4. **Batch-mixing genuinely plateaus by `mmd_weight=100` — this isn't an
+   unbounded knob.** Pushing to 200 and 500 moved batch-mixing purity by
+   \<0.001 (0.1769 → 0.1765) while donor retrieval stayed exactly flat at
+   0.922 and cell-type purity kept drifting down only slowly (0.273 → 0.267
+   → 0.264, a shrinking rate of decline, not a cliff). `mmd_weight≈100-200`
+   is the practical ceiling for this mechanism on this data — there's no
+   free additional batch-mixing improvement to be had by cranking the
+   weight further, only a slow, flattening cost to cell-type purity.
 
-Not yet tested: MMD combined with the adversarial/absorption terms rather
-than replacing them, or on Jerber/the full Levy dataset — see Next steps.
+**Combining MMD with the adversarial term doesn't beat MMD alone — it moves
+along the same trade-off curve, not off of it.** Took `mmd_weight=20` (the
+joint sweet spot above, where all three metrics beat baseline) and added
+back a weakened adversarial term:
+
+| `adversarial_weight` (with `mmd_weight=20`) | donor retrieval after | batch-mixing after | cell-type purity after |
+|---|---|---|---|
+| 0 (MMD alone, row above) | 0.906 | 0.225 | **0.383 (beats baseline)** |
+| 0.25 | 0.922 | 0.211 | 0.344 (below baseline) |
+| 0.5 | 0.906 | 0.219 | 0.370 (below baseline) |
+| 1.0 | 0.906 | 0.209 | 0.337 (below baseline) |
+
+Adding any adversarial weight buys a small batch-mixing improvement (0.225
+→ 0.209-0.219) but costs enough cell-type purity to drop it back *below*
+its own pre-correction baseline (0.375) — exactly the property that made
+`mmd_weight=20` alone special. The two mechanisms aren't complementary here;
+adding the adversarial term back just re-traces the same donor/batch-mixing-
+vs-cell-type curve MMD alone already traces by itself at a slightly higher
+weight, rather than reaching a better point off that curve. **MMD alone,
+not combined with the adversarial discriminator, is the better mechanism
+found in this project so far** — pick a point on its curve (weight≈20 for
+all-three-beat-baseline, weight≈100 for best achievable batch-mixing) rather
+than adding the discriminator back on top of it.
+
+Not yet tested: MMD on Jerber or the full 81k-cell Levy dataset — see Next
+steps.
 
 **scVI baseline: a genuine mechanism-level trade-off, not a win or a loss.**
 Once the `mudata`/`anndata` import conflict was resolved (upgrading
@@ -371,14 +405,7 @@ these — they're the concrete roadmap, not a hidden gap:
    it did on Levy's mature astrocytes, that's a real, useful finding about
    *when* this method is applicable (differentiated cell states, not early
    progenitors) rather than a blanket failure.
-2. **Push the MMD weight past 100, and try combining it with the adversarial
-   term.** Batch-mixing kept improving monotonically all the way to
-   `mmd_weight=100` (already past Harmony) with no sign of reversing — the
-   ceiling hasn't been found yet, and neither has where cell-type purity
-   bottoms out. Also worth testing whether a moderate MMD weight (~20,
-   the joint sweet spot above) combined with a weakened adversarial term
-   reaches a better three-way optimum than MMD alone.
-3. **Full ~81k-cell Levy dataset** — the discriminator-capacity sweep above
+2. **Full ~81k-cell Levy dataset** — the discriminator-capacity sweep above
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.

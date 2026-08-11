@@ -66,11 +66,16 @@ training:
   absorption_weight: 1.0
   # Maximum Mean Discrepancy between batches' corrected-embedding
   # distributions -- a non-adversarial alternative to the discriminator
-  # above (no min-max dynamics, no learnable parameters). Off by default
-  # (0.0) until validated against the adversarial/absorption setup on real
-  # data; Harmony's success on this exact batch-mixing regression via a
-  # similar distributional-alignment mechanism (rather than a classifier)
-  # is the motivation for trying it.
+  # above (no min-max dynamics, no learnable parameters). Motivated by
+  # Harmony's success on this exact batch-mixing regression via the same
+  # kind of distributional-alignment mechanism. A real dose-response sweep
+  # (README's Current results) found ~20 as a joint sweet spot where donor
+  # retrieval/batch-mixing/cell-type purity all beat baseline at once, and
+  # ~100 as the ceiling for batch-mixing improvement (plateaus past that).
+  # Combining this with adversarial_weight > 0 did not beat MMD alone in
+  # that sweep -- pick a point on this weight's curve, don't add the
+  # discriminator back on top of it. Off by default (0.0) pending
+  # validation beyond the one dataset that sweep used.
   mmd_weight: 0.0
   grad_clip_norm: 5.0
   min_variance_ratio: 0.8

@@ -86,6 +86,13 @@ training:
   # real cost to cell-type purity) -- raise toward 100 if batch-mixing is
   # what you care about most, keep at 20 for the more balanced trade-off.
   mmd_weight: 20.0
+  # Sums the RBF kernel at several bandwidth multiples of the median
+  # heuristic instead of using one bandwidth -- a standard MMD variant,
+  # meant to make the loss less sensitive to picking exactly the right
+  # bandwidth for a given minibatch. Not yet validated against the numbers
+  # above (which used the single-bandwidth default, False) -- off until it
+  # has its own real sweep.
+  mmd_multi_scale: false
   # MMD restricted to same-cell-type comparisons only, meant to fix the
   # cell-type-purity cost above without the composition confound global
   # MMD has. Real sweep (README's Current results) found it doesn't work,

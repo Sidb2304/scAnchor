@@ -117,6 +117,7 @@ def train(config: dict) -> CorrectionHead:
                 adversarial_weight=train_cfg.get("adversarial_weight", 1.0),
                 absorption_weight=train_cfg.get("absorption_weight", 1.0),
                 mmd_weight=train_cfg.get("mmd_weight", 0.0),
+                mmd_multi_scale=train_cfg.get("mmd_multi_scale", False),
                 conditional_mmd_weight=train_cfg.get("conditional_mmd_weight", 0.0),
                 temperature=train_cfg["contrastive_temperature"],
                 min_variance_ratio=train_cfg["min_variance_ratio"],

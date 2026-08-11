@@ -410,6 +410,42 @@ code — doesn't change that. `class_conditional_mmd_loss` and
 fixed a real bug in it, still didn't win" path, same treatment as the
 adversarial discriminator and split-latent architecture.
 
+**Multi-scale MMD kernel: shifts the trade-off curve, doesn't beat it.**
+`mmd_loss`'s RBF kernel used one bandwidth (the median-heuristic estimate).
+Standard MMD variants (e.g. Long et al.'s Deep Adaptation Networks) instead
+sum the kernel at several bandwidth multiples, meant to make the loss less
+sensitive to picking exactly the right scale for a given minibatch. Added as
+an opt-in flag (`mmd_multi_scale`, default off — `mmd_loss`'s existing
+behavior and already-validated numbers are unchanged unless explicitly
+requested) and swept at the same three weights already established for the
+single-bandwidth version, seed 0, real 18.2k-cell data:
+
+| `mmd_weight` | kernel | donor retrieval after | batch-mixing after | cell-type purity after |
+|---|---|---|---|---|
+| 20 | single-scale (default) | 0.906 | 0.225 | 0.383 |
+| 20 | multi-scale | 0.938 | 0.249 (worse — barely beats baseline) | 0.459 |
+| 50 | single-scale | 0.891 | 0.181 | 0.299 |
+| 50 | multi-scale | 0.891 | 0.193 (worse) | 0.328 |
+| 100 | single-scale | 0.922 | 0.177 | 0.273 |
+| 100 | multi-scale | 0.875 (worse) | **0.169 (new best, beats Harmony's 0.188)** | 0.278 |
+
+**No clean win — it's a different point on the trade-off surface, not a
+dominant one.** At `mmd_weight=20` and `50`, multi-scale trades away some
+batch-mixing improvement for meaningfully better cell-type purity (0.459 vs.
+0.383 at weight 20) — at weight 20 specifically, batch-mixing barely beats
+doing nothing at all (0.249 vs. 0.247 baseline), which defeats the point of
+using MMD there. At `mmd_weight=100`, the trade reverses: multi-scale sets
+a new best batch-mixing number for this project (0.169) but costs real
+donor retrieval (0.875 vs. 0.922). No weight tested gives a strict
+improvement on all three metrics over its single-scale counterpart.
+
+**Not adopted as the default**, for the same reason as everything else in
+this section — no unambiguous win, just a different shape of trade-off.
+`configs/default.yaml` stays at `mmd_multi_scale: false`. Kept in the
+codebase as a real, working option: set `mmd_multi_scale: true` with
+`mmd_weight=100` specifically if squeezing out the best possible
+batch-mixing number matters more than donor retrieval for a given use case.
+
 **scVI baseline: a genuine mechanism-level trade-off, not a win or a loss.**
 Once the `mudata`/`anndata` import conflict was resolved (upgrading
 `scvi-tools` to latest — see git history — rather than pinning older

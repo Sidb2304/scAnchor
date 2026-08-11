@@ -126,8 +126,36 @@ def _median_heuristic_sigma(x: torch.Tensor) -> torch.Tensor:
         return off_diag.median().clamp(min=1e-6)
 
 
+_MMD_KERNEL_SCALES = (0.25, 0.5, 1.0, 2.0, 4.0)
+
+
+def _rbf_kernel_mean(a: torch.Tensor, b: torch.Tensor, sigma: torch.Tensor, multi_scale: bool) -> torch.Tensor:
+    """Mean RBF kernel value between every row of `a` and every row of `b`.
+
+    `multi_scale=True` sums the kernel at `_MMD_KERNEL_SCALES` multiples of
+    `sigma` and averages, instead of using `sigma` alone -- a standard MMD
+    variant (e.g. Long et al.'s Deep Adaptation Networks) meant to make the
+    loss less sensitive to picking exactly the right bandwidth, since a
+    single median-heuristic estimate can be off for any given minibatch.
+    Averaging (not summing) the per-scale kernels keeps the aggregate at a
+    comparable magnitude to the single-scale version, so an `mmd_weight`
+    tuned for one is a reasonable starting point for the other, not a
+    completely different scale.
+    """
+    sq_dist = torch.cdist(a, b, p=2).pow(2)
+    if not multi_scale:
+        return torch.exp(-sq_dist / (2 * sigma.pow(2))).mean()
+    total = torch.zeros((), device=a.device)
+    for scale in _MMD_KERNEL_SCALES:
+        total = total + torch.exp(-sq_dist / (2 * (sigma * scale).pow(2))).mean()
+    return total / len(_MMD_KERNEL_SCALES)
+
+
 def _pairwise_mmd_sum(
-    embeddings: torch.Tensor, batch_ids: torch.Tensor, sigma: torch.Tensor | None = None
+    embeddings: torch.Tensor,
+    batch_ids: torch.Tensor,
+    sigma: torch.Tensor | None = None,
+    multi_scale: bool = False,
 ) -> tuple[torch.Tensor, int]:
     """Sum of pairwise MMD^2 across every pair of batches present, and the pair count.
 
@@ -145,6 +173,10 @@ def _pairwise_mmd_sum(
     training rather than helping (see README). `mmd_loss` doesn't pass this,
     so its behavior (and the dose-response numbers already validated
     against it) is unchanged.
+
+    `multi_scale`: see `_rbf_kernel_mean`. Defaults to False everywhere, so
+    existing callers (and their already-validated numbers) are unaffected
+    unless they explicitly opt in.
     """
     unique_batches = batch_ids.unique()
     if unique_batches.numel() < 2:
@@ -163,16 +195,16 @@ def _pairwise_mmd_sum(
             y = embeddings[batch_ids == batch_list[j]]
             if y.shape[0] < 2:
                 continue
-            k_xx = torch.exp(-torch.cdist(x, x, p=2).pow(2) / (2 * sigma.pow(2))).mean()
-            k_yy = torch.exp(-torch.cdist(y, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
-            k_xy = torch.exp(-torch.cdist(x, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            k_xx = _rbf_kernel_mean(x, x, sigma, multi_scale)
+            k_yy = _rbf_kernel_mean(y, y, sigma, multi_scale)
+            k_xy = _rbf_kernel_mean(x, y, sigma, multi_scale)
             total = total + (k_xx + k_yy - 2 * k_xy)
             n_pairs += 1
 
     return total, n_pairs
 
 
-def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
+def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor, multi_scale: bool = False) -> torch.Tensor:
     """Maximum Mean Discrepancy between every pair of batches in this minibatch.
 
     An explicit alternative mechanism to the adversarial discriminator, not
@@ -190,8 +222,13 @@ def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
     Requires >=2 batches with >=2 cells each in the minibatch to compute
     anything meaningful; returns 0 (inert) otherwise, same pattern as
     donor_consistency_loss.
+
+    `multi_scale=False` (default) reproduces the exact single-bandwidth
+    formula this project's dose-response sweep was validated against --
+    set True to opt into the multi-kernel variant (see `_rbf_kernel_mean`),
+    a separate, not-yet-validated mechanism.
     """
-    total, n_pairs = _pairwise_mmd_sum(embeddings, batch_ids)
+    total, n_pairs = _pairwise_mmd_sum(embeddings, batch_ids, multi_scale=multi_scale)
     if n_pairs == 0:
         return torch.zeros((), device=embeddings.device)
     return total / n_pairs
@@ -275,6 +312,7 @@ def correction_loss(
     adversarial_weight: float = 1.0,
     absorption_weight: float = 1.0,
     mmd_weight: float = 0.0,
+    mmd_multi_scale: bool = False,
     conditional_mmd_weight: float = 0.0,
     temperature: float = 0.1,
     min_variance_ratio: float = 0.8,
@@ -304,7 +342,7 @@ def correction_loss(
 
     mmd_term = torch.zeros((), device=corrected.device)
     if batch_ids is not None:
-        mmd_term = mmd_loss(corrected, batch_ids)
+        mmd_term = mmd_loss(corrected, batch_ids, multi_scale=mmd_multi_scale)
         total = total + mmd_weight * mmd_term
 
     conditional_mmd_term = torch.zeros((), device=corrected.device)

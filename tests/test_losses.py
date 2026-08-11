@@ -194,6 +194,72 @@ def test_mmd_loss_ignores_batches_with_fewer_than_two_cells():
     assert loss.item() == 0.0
 
 
+def test_mmd_loss_multi_scale_default_matches_single_scale():
+    """multi_scale defaults to False -- existing validated numbers unaffected."""
+    torch.manual_seed(0)
+    x = torch.randn(10, 8)
+    y = torch.randn(10, 8) + 5.0
+    embeddings = torch.cat([x, y], dim=0)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+
+    default_loss = mmd_loss(embeddings, batch_ids)
+    explicit_single = mmd_loss(embeddings, batch_ids, multi_scale=False)
+
+    assert default_loss.item() == explicit_single.item()
+
+
+def test_mmd_loss_multi_scale_finite_and_positive_across_shifted_batches():
+    torch.manual_seed(0)
+    x = torch.randn(10, 8)
+    y = torch.randn(10, 8) + 5.0
+    embeddings = torch.cat([x, y], dim=0)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+
+    loss = mmd_loss(embeddings, batch_ids, multi_scale=True)
+
+    assert torch.isfinite(loss)
+    assert loss.item() > 0.0
+
+
+def test_mmd_loss_multi_scale_differs_from_single_scale():
+    torch.manual_seed(0)
+    x = torch.randn(10, 8)
+    y = torch.randn(10, 8) + 5.0
+    embeddings = torch.cat([x, y], dim=0)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+
+    single = mmd_loss(embeddings, batch_ids, multi_scale=False)
+    multi = mmd_loss(embeddings, batch_ids, multi_scale=True)
+
+    assert single.item() != multi.item()
+
+
+def test_mmd_loss_multi_scale_zero_with_single_batch():
+    embeddings = torch.randn(10, 8)
+    batch_ids = torch.zeros(10, dtype=torch.long)
+
+    loss = mmd_loss(embeddings, batch_ids, multi_scale=True)
+
+    assert loss.item() == 0.0
+
+
+def test_correction_loss_mmd_multi_scale_wired_through():
+    torch.manual_seed(0)
+    original = torch.randn(10, 8)
+    corrected = original + 5.0 * torch.randn(10, 8)
+    labels = torch.randint(0, 3, (10,))
+    batch_ids = torch.cat([torch.zeros(5, dtype=torch.long), torch.ones(5, dtype=torch.long)])
+
+    _, metrics_single = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, mmd_weight=1.0, mmd_multi_scale=False
+    )
+    _, metrics_multi = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, mmd_weight=1.0, mmd_multi_scale=True
+    )
+
+    assert metrics_single["mmd"] != metrics_multi["mmd"]
+
+
 def test_correction_loss_mmd_term_inert_when_weight_zero():
     torch.manual_seed(0)
     original = torch.randn(10, 8)

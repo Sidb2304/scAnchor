@@ -33,8 +33,13 @@ everything you've already processed.
 ## Status
 
 Validated end-to-end against real data, with a partial, honestly-reported
-result — not a finished method. See **Current results** below before relying
-on this for anything beyond experimentation.
+result — not a finished method. The default config (adversarial
+discriminator) still regresses batch-mixing purity; a newer MMD-based loss
+(off by default, `mmd_weight: 0.0`) fixes that regression and, at higher
+weights, beats the Harmony baseline on the same metric — but trades away
+cell-type purity in exchange, and hasn't been validated on any dataset
+besides the one below. See **Current results** before relying on this for
+anything beyond experimentation.
 
 ## Current results
 
@@ -222,6 +227,89 @@ number: `harmony_correct`'s unconditional `.T` assumed an orientation that
 doesn't hold for the installed harmonypy version, causing a silent shape
 mismatch that would have crashed downstream.
 
+**MMD loss: the first mechanism in this project that actually beats the
+pre-correction baseline on batch-mixing — with a real, clean dose-response
+curve.** Implemented `mmd_loss()` (RBF-kernel Maximum Mean Discrepancy,
+median-heuristic bandwidth, pairwise across every batch present in a
+minibatch — see `model/losses.py`) as a direct alternative to the
+adversarial discriminator, motivated exactly by the Harmony result above:
+distributional alignment, not an adversarial classifier. Swept `mmd_weight`
+on the same 18.2k-cell data, seed 0, with the adversarial and absorption
+terms both **off** (`adversarial_weight=0`, `absorption_weight=0`) to
+isolate MMD's effect on its own:
+
+| `mmd_weight` | donor retrieval after | batch-mixing after | cell-type purity after |
+|---|---|---|---|
+| 0 (contrastive+donor+variance only) | 0.766 | 0.401 (worse) | 0.633 |
+| 1 | 0.922 | 0.391 (worse) | 0.624 |
+| 5 | 0.953 | 0.335 (worse) | 0.565 |
+| 10 | 0.953 | 0.279 (worse) | 0.486 |
+| **20** | **0.906** | **0.225 (better)** | **0.383 (better)** |
+| 50 | 0.891 | 0.181 (better, ~matches Harmony) | 0.299 (worse) |
+| 100 | 0.922 | **0.177 (better than Harmony)** | 0.273 (worse) |
+
+(baseline before correction, every row: donor retrieval 0.594, batch-mixing
+0.247, cell-type purity 0.375)
+
+This is a genuinely clean, monotonic dose-response relationship — batch-
+mixing keeps improving as `mmd_weight` increases across the entire swept
+range with no noise or reversal, unlike the discriminator-capacity sweep
+above. Three real findings:
+
+1. **MMD is the first mechanism in this whole project to actually beat the
+   pre-correction baseline on batch-mixing, not just shrink the regression.**
+   Every prior attempt here (adversarial discriminator at any capacity,
+   both split-latent versions) made batch-mixing *worse* than doing nothing.
+   MMD crosses below baseline at `mmd_weight=20` and keeps improving —
+   at `mmd_weight=100` it's better than Harmony (0.177 vs. 0.188), the
+   external baseline that motivated trying this mechanism in the first
+   place.
+2. **`mmd_weight≈20` is a genuine joint sweet spot, not a cherry-pick.** At
+   that setting, all three metrics beat their pre-correction baseline
+   simultaneously (donor 0.594→0.906, batch-mixing 0.247→0.225, cell-type
+   0.375→0.383) — the first configuration in this project where that's true
+   for all three at once. No prior discriminator/split-latent config
+   achieved this; they all traded batch-mixing against the other two.
+3. **The trade-off doesn't disappear, it just moves.** Past `mmd_weight≈20`,
+   cell-type purity keeps dropping and crosses back below its own baseline
+   by `mmd_weight=50` — the best batch-mixing numbers (50, 100) come at a
+   real cost to within-cell-type structure, the same donor-vs-batch tension
+   seen everywhere else in this project, just shifted to a better operating
+   point on the curve than the adversarial mechanism ever reached.
+
+Not yet tested: MMD combined with the adversarial/absorption terms rather
+than replacing them, or on Jerber/the full Levy dataset — see Next steps.
+
+**scVI baseline: a genuine mechanism-level trade-off, not a win or a loss.**
+Once the `mudata`/`anndata` import conflict was resolved (upgrading
+`scvi-tools` to latest — see git history — rather than pinning older
+versions, which turned out to be self-contradictory in its own declared
+metadata), scVI ran on the same 18,238-cell combined set, transductively,
+directly on raw counts (`n_latent=32`, 30 epochs — a different kind of
+baseline than Harmony/scAnchor, since it's a full generative model of
+expression rather than a post-hoc embedding correction):
+
+| method | batch-mixing purity (lower=better) | cell-type kNN purity |
+|---|---|---|
+| raw embedding, no correction | 0.247 | 0.375 |
+| Harmony | 0.188 | 0.320 |
+| scAnchor (256-unit discriminator, adversarial) | 0.280 | 0.380 |
+| scAnchor (`mmd_weight=20`, adversarial off) | 0.225 | 0.383 |
+| scAnchor (`mmd_weight=100`, adversarial off) | **0.177** | 0.273 |
+| **scVI** | 0.313 (worse than *no correction at all*) | **0.875** |
+
+scVI's cell-type purity is dramatically higher than every other method here
+— consistent with it learning directly from raw count structure, which
+encodes cell identity much more directly than a post-hoc correction of a
+foundation-model embedding can. But its batch-mixing purity is the worst of
+all four rows, including doing nothing — a real, reproducible result, not a
+bug: training directly on raw counts with `batch_key` set doesn't
+automatically make cell neighborhoods less batch-structured by this kNN
+metric on this dataset. Another data point for the same conclusion Harmony
+already supported: the failure mode here is mechanism/metric-specific, not
+a property of the dataset that makes batch-mixing improvement generally
+incompatible with preserving biological signal.
+
 ## Install
 
 ```bash
@@ -277,27 +365,23 @@ to approach transductive performance without needing the new batch's data.
 Shipping now with the open problems above documented rather than waiting on
 these — they're the concrete roadmap, not a hidden gap:
 
-1. **Try a distribution-matching (MMD) loss instead of the adversarial
-   classifier.** The split-latent architecture change (two attempts, see
-   Current results) didn't fix the batch-mixing regression, and the Harmony
-   baseline comparison shows *why that's worth pursuing*: Harmony genuinely
-   improves this exact metric on this exact data via distributional
-   alignment (iterative clustering), not an adversarial classifier at all.
-   Swapping `BatchDiscriminator`'s mechanism for a Maximum Mean Discrepancy
-   penalty between batches' `z_bio` distributions is the next real attempt,
-   not another adversarial-classifier variant.
-2. **scVI baseline is still blocked** — installed but broken in this
-   environment (a `mudata`/`anndata` version conflict:
-   `AlignedViewMixin` import error). Harmony's comparison is done and
-   documented above; scVI would add a second, differently-mechanized
-   comparison point (full generative model on raw counts, not a post-hoc
-   embedding correction) but needs a dependency fix first.
-3. **Jerber's day-30 and day-52 timepoints** — later, more differentiated
+1. **Jerber's day-30 and day-52 timepoints** — later, more differentiated
    dopaminergic neurons, as a direct test of the "day-11 progenitors are just
    too homogeneous" hypothesis above. If donor retrieval works there the way
    it did on Levy's mature astrocytes, that's a real, useful finding about
    *when* this method is applicable (differentiated cell states, not early
    progenitors) rather than a blanket failure.
+2. **Push the MMD weight past 100, and try combining it with the adversarial
+   term.** Batch-mixing kept improving monotonically all the way to
+   `mmd_weight=100` (already past Harmony) with no sign of reversing — the
+   ceiling hasn't been found yet, and neither has where cell-type purity
+   bottoms out. Also worth testing whether a moderate MMD weight (~20,
+   the joint sweet spot above) combined with a weakened adversarial term
+   reaches a better three-way optimum than MMD alone.
+3. **Full ~81k-cell Levy dataset** — the discriminator-capacity sweep above
+   already showed data volume doesn't move batch-mixing, so this is lower
+   priority than it might seem, but would confirm donor-retrieval gains hold
+   at the full scale rather than just the 18.2k-cell subsample.
 
 ## Reference panel
 

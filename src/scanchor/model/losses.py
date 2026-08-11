@@ -111,6 +111,67 @@ def variance_floor_penalty(
     return penalty / max(n_terms, 1)
 
 
+def _median_heuristic_sigma(x: torch.Tensor) -> torch.Tensor:
+    """Standard RBF-kernel bandwidth choice: the median pairwise distance.
+
+    Computed under no_grad -- the bandwidth is a fixed scale choice per
+    minibatch, not something we want gradients flowing back through (that
+    would let the loss cheat by shrinking the kernel width instead of
+    actually moving the embeddings).
+    """
+    with torch.no_grad():
+        dist = torch.cdist(x, x, p=2)
+        n = dist.shape[0]
+        off_diag = dist[~torch.eye(n, dtype=torch.bool, device=dist.device)]
+        return off_diag.median().clamp(min=1e-6)
+
+
+def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
+    """Maximum Mean Discrepancy between every pair of batches in this minibatch.
+
+    An explicit alternative mechanism to the adversarial discriminator, not
+    another variant of it. Adversarial training relies on a classifier
+    "keeping up" in a min-max game -- fragile by construction, and the exact
+    failure mode hit earlier in this project (a fixed adversarial strength
+    caused runaway divergence). MMD has no learnable parameters and no
+    min-max dynamics: it's a direct, differentiable statistical distance
+    between each batch's embedding distribution and every other batch's,
+    using an RBF kernel. Motivated by a real result, not just theory: Harmony
+    -- which works via distributional alignment, not an adversarial
+    classifier -- measurably improved batch-mixing on this exact data/metric
+    where the adversarial approach here consistently regressed it.
+
+    Requires >=2 batches with >=2 cells each in the minibatch to compute
+    anything meaningful; returns 0 (inert) otherwise, same pattern as
+    donor_consistency_loss.
+    """
+    unique_batches = batch_ids.unique()
+    if unique_batches.numel() < 2:
+        return torch.zeros((), device=embeddings.device)
+
+    sigma = _median_heuristic_sigma(embeddings)
+    total = torch.zeros((), device=embeddings.device)
+    n_pairs = 0
+    batch_list = unique_batches.tolist()
+    for i in range(len(batch_list)):
+        x = embeddings[batch_ids == batch_list[i]]
+        if x.shape[0] < 2:
+            continue
+        for j in range(i + 1, len(batch_list)):
+            y = embeddings[batch_ids == batch_list[j]]
+            if y.shape[0] < 2:
+                continue
+            k_xx = torch.exp(-torch.cdist(x, x, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            k_yy = torch.exp(-torch.cdist(y, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            k_xy = torch.exp(-torch.cdist(x, y, p=2).pow(2) / (2 * sigma.pow(2))).mean()
+            total = total + (k_xx + k_yy - 2 * k_xy)
+            n_pairs += 1
+
+    if n_pairs == 0:
+        return torch.zeros((), device=embeddings.device)
+    return total / n_pairs
+
+
 def adversarial_batch_loss(batch_logits: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
     """Cross-entropy of a batch discriminator's predictions.
 
@@ -138,6 +199,7 @@ def correction_loss(
     donor_weight: float = 1.0,
     adversarial_weight: float = 1.0,
     absorption_weight: float = 1.0,
+    mmd_weight: float = 0.0,
     temperature: float = 0.1,
     min_variance_ratio: float = 0.8,
 ) -> tuple[torch.Tensor, dict[str, float]]:
@@ -164,11 +226,17 @@ def correction_loss(
         absorption_term = adversarial_batch_loss(absorber_logits, batch_ids)
         total = total + absorption_weight * absorption_term
 
+    mmd_term = torch.zeros((), device=corrected.device)
+    if batch_ids is not None:
+        mmd_term = mmd_loss(corrected, batch_ids)
+        total = total + mmd_weight * mmd_term
+
     return total, {
         "contrastive": contrastive.item(),
         "variance_penalty": variance_penalty.item(),
         "donor_consistency": donor_term.item(),
         "adversarial_batch": adversarial_term.item(),
         "batch_absorption": absorption_term.item(),
+        "mmd": mmd_term.item(),
         "total": total.item(),
     }

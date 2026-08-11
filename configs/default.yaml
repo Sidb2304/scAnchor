@@ -64,6 +64,14 @@ training:
   # variance so the adversarial term above has less to fight over on the
   # main corrected embedding.
   absorption_weight: 1.0
+  # Maximum Mean Discrepancy between batches' corrected-embedding
+  # distributions -- a non-adversarial alternative to the discriminator
+  # above (no min-max dynamics, no learnable parameters). Off by default
+  # (0.0) until validated against the adversarial/absorption setup on real
+  # data; Harmony's success on this exact batch-mixing regression via a
+  # similar distributional-alignment mechanism (rather than a classifier)
+  # is the motivation for trying it.
+  mmd_weight: 0.0
   grad_clip_norm: 5.0
   min_variance_ratio: 0.8
   checkpoint_out: checkpoints/correction_head.pt

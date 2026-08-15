@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -N scanchor_scib_seeds
-#$ -o scanchor_scib_seeds.$TASK_ID.log
+#$ -o logs/scanchor_scib_seeds.$TASK_ID.log
 #$ -j y
 #$ -cwd
 #$ -l h_vmem=32G
@@ -50,8 +50,12 @@ for path_var in REPO_DIR CHECKPOINT_DIR CONDA_ENV_PATH; do
         exit 1
     fi
 done
-mkdir -p "$DATA_CACHE_DIR" "$OUT_DIR"
+mkdir -p "$DATA_CACHE_DIR" "$OUT_DIR" "$REPO_DIR/logs"
 # --- end preflight check ---
+# Note: this mkdir happens AFTER SGE has already tried to open the -o log
+# path above, so it doesn't help THIS run if logs/ was missing at qsub
+# time -- it's just defensive for next time. logs/ must already exist
+# in $REPO_DIR before you run qsub.
 
 # Same conda-activation approach as submit_uger_scib.sh (batch jobs don't
 # inherit the interactive login shell's `use`/.bashrc setup that makes

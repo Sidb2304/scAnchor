@@ -616,9 +616,13 @@ Two tests, deliberately independent of any enrichment/eQTL statistics:
    generalization to an unseen batch — and it's the part existing transductive
    tools aren't built for.
 
-Baselines (Harmony, scVI, scDisInFact) are run in their normal transductive
-mode — with full access to the held-out batch — for comparison. The goal is
-to approach transductive performance without needing the new batch's data.
+Baselines (Harmony, scVI — see Current results) are run in their normal
+transductive mode — with full access to the held-out batch — for
+comparison. The goal is to approach transductive performance without
+needing the new batch's data. (scDisInFact was originally planned as a
+third baseline here but hadn't actually been run — see Next steps for
+where that stands and why it's a different kind of comparison than
+Harmony/scVI.)
 
 **True cross-study zero-shot transfer: the sharpest test of the inductive
 claim — and it's asymmetric, not a general property.** Every generalization
@@ -698,11 +702,31 @@ these — they're the concrete roadmap, not a hidden gap:
    and the direction of biological maturity (progenitor→mature vs.
    mature→progenitor, which the two-dataset design also can't separate from
    "which study is which"). Also still single-seed, one dataset pair.
-3. **Compare against the actual competing category of methods** (scDisInFact,
-   CODAL, sysVI — cited in References below but never run). Harmony/scVI
-   are transductive, a different setting by design; a real comparison
-   against other *inductive* methods is the one still missing for a
-   complete picture of where this stands in its actual category.
+3. **scDisInFact/CODAL/sysVI: a real feasibility check found they're not as
+   directly comparable as this README previously implied.** All three are
+   full generative models (VAE or topic model) trained on raw/normalized
+   counts, not a post-hoc correction layer on frozen foundation-model
+   embeddings like scAnchor — the same operating-mode difference already
+   documented for the scVI baseline above, not a new caveat. Concretely:
+   - **CODAL** isn't a standalone package (it's the inference algorithm
+     inside `mira-multiome`), maintenance is stale (~16 months since the
+     last real commit), and it caps `torch<=2.0.0` while pulling in
+     unrelated heavyweight genomic-motif dependencies (`lisa2`,
+     `mira-moods`) — not worth pursuing.
+   - **sysVI** ships inside `scvi.external` as of scvi-tools 1.3.0 (its
+     original standalone repo explicitly says it won't be maintained
+     further) — well-engineered, but the exact torch/lightning/scvi-tools
+     dependency chain that already cost a full session of install
+     troubleshooting on this cluster, for a method that (like scVI)
+     trains on raw counts anyway. Not worth the risk for likely the same
+     kind of result the scVI baseline already gives.
+   - **scDisInFact** is the one worth attempting: lightweight, plain-torch
+     dependencies (no scvi-tools at all), maintained within the last year,
+     and — unlike scVI — its actual purpose is disentangling batch/
+     condition effects, closer in spirit to scAnchor's covariate
+     conditioning than a general integration tool. Not on PyPI (needs a
+     source clone); scoping the real integration effort (adapting its
+     non-AnnData, raw-counts API to this project's data) is in progress.
 
 ## Reference panel
 
@@ -724,8 +748,11 @@ these — they're the concrete roadmap, not a hidden gap:
 
 - Batch effects as a barrier to universal single-cell foundation model
   embeddings (bioRxiv, 2025) — motivates this project directly.
-- scDisInFact, scDisco, sysVI — transductive disentangled batch correction;
-  the baselines this complements rather than replaces.
+- scDisInFact, CODAL (via `mira-multiome`), sysVI (via `scvi.external`) —
+  transductive, counts-based disentangled batch correction; the baselines
+  this complements rather than replaces, not a like-for-like comparison to
+  scAnchor's frozen-embedding correction (see Current results / Next
+  steps for a real feasibility assessment of each).
 
 ## License
 

@@ -82,6 +82,15 @@ def build_subsample(full_path: Path, subsample_path: Path) -> ad.AnnData:
     print(f"subsampling to {len(keep_idx)} cells across {full.obs['donor_id'].nunique()} donors ...")
     sub = full[keep_idx].to_memory()
 
+    # AnnData doesn't subset .uns (it's unstructured, arbitrary content) --
+    # this file's uns/antibody_X, uns/antibody_raw.X, and
+    # uns/neighbors/rp_forest are all still full-647k-cell-sized structures
+    # (confirmed via direct h5py inspection: e.g. antibody_X's indptr has
+    # shape (647367,), not (n_obs+1,)) and unused by this pipeline. Clearing
+    # before writing keeps the cache at ~subsample scale instead of ~7GB of
+    # irrelevant dead weight riding along on every write/read.
+    sub.uns.clear()
+
     # raw counts live in .raw.X per this file's CELLxGENE schema (X itself is
     # normalized/processed) -- confirmed from this dataset's own metadata
     # (raw_data_location: raw.X), not assumed.

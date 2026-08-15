@@ -626,6 +626,28 @@ Reproducible via `scripts/run_stephenson_benchmark.py` (scAnchor +
 Harmony) and `scripts/run_scdisinfact_stephenson.py` (scDisInFact), both
 driven by `scripts/submit_uger_stephenson.sh`.
 
+**Why Stephenson's regression is the worst seen in this project: the
+held-out site isn't just a different batch, it's a different disease
+population.** Same PBMC-type data as the scIB immune atlas above, but a
+much bigger batch-mixing regression here — worth understanding rather than
+shrugging off as dataset noise. Checked directly from the cached
+subsample's metadata (no retraining needed): the "hold out the smallest
+batch" heuristic used throughout this project picked Sanger (1,925 cells,
+11 donors) as the held-out site, and Sanger is **100% Covid patients** —
+zero Healthy, LPS, or Non_covid cells. The two training sites both have a
+real status mixture (Cambridge: 76.6% Covid/23.4% Healthy; Ncl: 62.9%
+Covid/19.4% Healthy/9.7% LPS/8.1% Non_covid). `Status` also isn't fed to
+the model as a covariate at all (only `batch` is), so the correction head
+has no way to tell "genuine Covid-driven biology" apart from
+"Sanger-specific technical effect" for these cells. This is the same
+failure mode already documented in the class-conditional MMD section
+above — global MMD can't separate batch structure from composition
+differences — just with a clinical variable driving the composition shift
+here instead of cell type. It's also a case where the blanket
+"hold out the smallest batch" heuristic used everywhere in this project
+picked the single most compositionally extreme site available, rather
+than one chosen with this kind of confound in mind.
+
 ## Install
 
 ```bash
@@ -786,10 +808,6 @@ these — they're the concrete roadmap, not a hidden gap:
      genuinely improved batch-mixing there, at a real cost to cell-type
      purity — no method won cleanly, see Current results for the honest
      three-way comparison.
-4. **scAnchor's batch-mixing regression on Stephenson was the largest seen
-   on any dataset in this project.** Worth understanding whether that's
-   this dataset's specific donor×site confound, its 4-way `Status`
-   imbalance, or something else — not yet isolated.
 
 ## Reference panel
 

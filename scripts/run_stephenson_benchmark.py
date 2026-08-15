@@ -86,6 +86,12 @@ def build_subsample(full_path: Path, subsample_path: Path) -> ad.AnnData:
     # normalized/processed) -- confirmed from this dataset's own metadata
     # (raw_data_location: raw.X), not assumed.
     sub.X = sub.raw[:, sub.var_names].X.copy()
+    # var_names are Ensembl IDs (e.g. ENSG00000243485) per this file's
+    # CELLxGENE schema, NOT gene symbols -- confirmed directly (a first
+    # real run against scGPT's vocab matched 0/24245 genes using var_names
+    # as-is). Real gene symbols live in the separate feature_name column.
+    sub.var["gene_name"] = sub.var["feature_name"].astype(str)
+    sub.var_names = sub.var["gene_name"]
     sub.var_names_make_unique()
     sub.var["gene_name"] = sub.var_names
     sub.obs["batch"] = sub.obs["Site"].astype(str)

@@ -32,25 +32,33 @@ everything you've already processed.
 
 ## Status
 
-Validated end-to-end against real data, with a partial, honestly-reported
-result — not a finished method. The default config now uses the MMD loss
-(`mmd_weight: 20`, `adversarial_weight: 0`, `absorption_weight: 0`) rather
-than the original adversarial discriminator, which a real, seed-checked
-sweep showed consistently regresses batch-mixing purity. MMD fixes that
-regression and, at higher weights, beats the Harmony baseline on the same
-metric — but trades away cell-type purity in exchange. Since then,
-validated on the standard scIB atlas-level benchmarks (immune, pancreas,
-lung) in addition to the two datasets this project assembled itself:
-consistently beats Harmony on cell-type purity across all three (seed-
-checked, 3 seeds each), with a more mixed, dataset- and seed-dependent
-result on batch-mixing. Also compared against scDisInFact — the one
-counts-based, condition-disentangling method judged worth attempting (see
-Next steps) — on a genuinely independent public dataset (Stephenson et
-al. 2021): no method wins cleanly there either, each fails differently.
-The adversarial discriminator and split-latent architecture are still in
-the codebase (`adversarial_weight`/`absorption_weight` > 0) for
-comparison, not because either is recommended. See **Current results**
-before relying on this for anything beyond experimentation.
+Validated end-to-end against real data, both datasets this project
+assembled itself and public ones (scIB atlases, Stephenson et al. 2021).
+The batch-mixing-vs-cell-type-purity trade-off documented throughout this
+README is a structural property of the problem this project has
+consistently found, not a bug still waiting to be fixed: every mechanism
+tried — adversarial discriminator, split-latent architecture, global MMD,
+class-conditional MMD, multi-scale MMD — lands somewhere on that same
+curve, never off of it. This project's contribution is characterizing
+that curve honestly with real, seed-checked evidence and shipping a
+validated default, not claiming to have eliminated the trade-off.
+
+**Recommendation:** use the shipped default
+(`mmd_weight: 20`, `adversarial_weight: 0`, `absorption_weight: 0`) as a
+balanced middle ground — donor retrieval and batch-mixing both robustly
+beat the pre-correction baseline, cell-type purity roughly neutral. If
+batch-mixing is what matters most for your use case, raise to
+`mmd_weight: 100` (a real, validated ceiling — beats Harmony on this
+metric, at a real, larger cost to cell-type purity). Don't turn the
+adversarial discriminator or split-latent architecture back on
+(`adversarial_weight`/`absorption_weight` > 0) — both are kept in the
+codebase for comparison, and a real, seed-checked sweep found the
+discriminator consistently regresses batch-mixing purity, with
+split-latent never beating the simple single-embedding architecture on
+the one thing it was built to fix. See **Current results** for the full
+evidence behind this recommendation, including where it doesn't hold
+(the Stephenson comparison, where all three methods tested — scAnchor,
+Harmony, scDisInFact — fail differently and none wins cleanly).
 
 ## Current results
 
@@ -680,6 +688,32 @@ python -m scanchor.evaluate.replicate_test --config configs/default.yaml
 python -m scanchor.evaluate.leave_one_batch_out --config configs/default.yaml
 ```
 
+## Configuration
+
+`configs/default.yaml` (loaded by `scanchor.config.load_config` as a plain
+dict — no schema class, no hidden defaults beyond the `.get()` fallbacks
+visible in `train.py`/the evaluate modules) is the stable public interface
+as of 1.0: its four top-level sections (`reference_panel`, `model`,
+`training`, `validation`) and every key under them are the contract this
+project commits to from here on — a key being renamed, removed, or
+changed to mean something different is a breaking change and gets called
+out in CHANGELOG.md, not made silently. Adding a new *optional* key with a
+backward-compatible default is not a breaking change.
+
+The file itself is the documentation — every non-obvious key has an
+inline comment tracing back to the specific real experiment that set its
+current value (see Current results above for the underlying evidence), so
+it isn't duplicated here. Two things worth knowing before editing it:
+
+- **Every field with a real, validated default is annotated with *why* in
+  the comment right above it** — if you're about to change one, read that
+  comment first; several look like they'd be free wins (e.g. bumping
+  `discriminator_hidden_dim` or turning `mmd_multi_scale` on) but were
+  specifically tested and didn't validate.
+- **New keys should default to today's validated behavior when absent**,
+  so existing configs (including anyone's already-saved YAML) keep working
+  unchanged after an upgrade.
+
 ## Evaluation
 
 Two tests, deliberately independent of any enrichment/eQTL statistics:
@@ -770,16 +804,20 @@ these — they're the concrete roadmap, not a hidden gap:
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
-2. **Isolate the real driver of the cross-study transfer asymmetry.**
-   Source-dataset size is ruled out (see above) — a Levy source matched to
-   Jerber's exact cell count still transferred in the *same* direction as
-   the full-size source, just weaker. What's left: Jerber's sparse
-   donor-crossing structure (162 total donors, 25 crossed — can't be
-   reproduced from Levy's 8 densely-crossed donors, needs either a
-   differently-structured source dataset or an artificially-sparsified one),
-   and the direction of biological maturity (progenitor→mature vs.
-   mature→progenitor, which the two-dataset design also can't separate from
-   "which study is which"). Also still single-seed, one dataset pair.
+2. **The cross-study transfer asymmetry's exact driver is a known,
+   documented limitation, closed out rather than actively pursued for
+   1.0.** Source-dataset size is ruled out (see above) — a Levy source
+   matched to Jerber's exact cell count still transferred in the *same*
+   direction as the full-size source, just weaker. What's left unisolated:
+   Jerber's sparse donor-crossing structure (162 total donors, 25 crossed
+   — can't be reproduced from Levy's 8 densely-crossed donors) and the
+   direction of biological maturity (progenitor→mature vs.
+   mature→progenitor, which the two-dataset design can't separate from
+   "which study is which"). Telling these apart needs a third dataset or
+   an artificially-sparsified source, real new data-collection effort
+   rather than more analysis of what's already in hand — not worth
+   blocking 1.0 on. Revisit if a natural third dataset shows up rather
+   than seeking one out specifically for this.
 3. **scDisInFact/CODAL/sysVI: a real feasibility check found they're not as
    directly comparable as this README previously implied.** All three are
    full generative models (VAE or topic model) trained on raw/normalized

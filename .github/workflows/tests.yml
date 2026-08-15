@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU-only torch first
+        # CI has no GPU, and the default PyPI wheel pulls in CUDA -- a
+        # multi-GB, unnecessary download here (same reasoning as this
+        # project's cluster setup, see README/scripts install notes).
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install scanchor with dev extras
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: python -m pytest -q tests/

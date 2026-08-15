@@ -38,9 +38,12 @@ result — not a finished method. The default config now uses the MMD loss
 than the original adversarial discriminator, which a real, seed-checked
 sweep showed consistently regresses batch-mixing purity. MMD fixes that
 regression and, at higher weights, beats the Harmony baseline on the same
-metric — but trades away cell-type purity in exchange, and hasn't been
-validated on any dataset besides the one below. The adversarial
-discriminator and split-latent architecture are still in the codebase
+metric — but trades away cell-type purity in exchange. Since then,
+validated on the standard scIB atlas-level benchmarks (immune, pancreas,
+lung) in addition to the two datasets this project assembled itself:
+consistently beats Harmony on cell-type purity across all three, with a
+more mixed result on batch-mixing. The adversarial discriminator and
+split-latent architecture are still in the codebase
 (`adversarial_weight`/`absorption_weight` > 0) for comparison, not because
 either is recommended. See **Current results** before relying on this for
 anything beyond experimentation.
@@ -514,6 +517,36 @@ already supported: the failure mode here is mechanism/metric-specific, not
 a property of the dataset that makes batch-mixing improvement generally
 incompatible with preserving biological signal.
 
+**Validated on the standard scIB atlas-level benchmarks — a real win on
+cell-type purity, a mixed result on batch-mixing.** Every result above used
+datasets this project assembled itself (Levy, Jerber). The scIB atlas-level
+integration benchmarks (immune, pancreas, lung — the standard reference
+point every batch-correction method in the field gets compared against)
+were flagged as "not yet run" since this project's start. Ran the shipped
+default config (`mmd_weight=20`) plus a Harmony baseline on all three, via
+`scripts/run_scib_benchmark.py` on a UGER cluster (see that script and
+`scripts/submit_uger_scib.sh` for the full pipeline):
+
+| dataset | batch-mixing before → after (scAnchor) | Harmony | cell-type before → after (scAnchor) | Harmony |
+|---|---|---|---|---|
+| pancreas (16,382 cells) | 0.729 → 0.596 | **0.567** | 0.798 → **0.870** | 0.787 |
+| lung (32,472 cells) | 0.648 → 0.643 | **0.638** | 0.886 → **0.924** | 0.862 |
+| immune (33,506 cells) | 0.712 → 0.713 | 0.730 (worse than baseline) | 0.875 → **0.924** | 0.880 |
+
+**scAnchor beats Harmony on cell-type purity on all three datasets,
+consistently** — and does it in inductive mode (the held-out batch was
+never seen during training), against Harmony's transductive mode (full
+access to every batch at correction time). Batch-mixing is more mixed:
+Harmony wins on pancreas and (narrowly) lung, but on immune Harmony
+actually does *worse* than doing nothing at all (0.730 vs. 0.712 before),
+while scAnchor stays flat. This is the most direct, standard-benchmark
+evidence so far that the trade-off documented throughout this project
+(batch-mixing vs. cell-type preservation) is real and consistent, not an
+artifact of the two datasets this project happened to assemble itself —
+and that scAnchor's side of that trade-off (favoring cell-type/biological
+signal) holds up against an established external baseline on data neither
+was tuned for. Single seed, one run each — see Next steps.
+
 ## Install
 
 ```bash
@@ -642,13 +675,18 @@ these — they're the concrete roadmap, not a hidden gap:
    and the direction of biological maturity (progenitor→mature vs.
    mature→progenitor, which the two-dataset design also can't separate from
    "which study is which"). Also still single-seed, one dataset pair.
+3. **Seed-check the scIB benchmark results.** Single seed, one run each —
+   the cell-type-purity win over Harmony was consistent across all three
+   datasets, which is a good sign, but "consistent across datasets at one
+   seed" isn't the same guarantee as the seed-robustness check already done
+   for the core MMD dose-response result.
 
 ## Reference panel
 
-- General covariate-conditioned training signal (not yet run): [scIB benchmark
+- **Public domain validation (used above):** [scIB benchmark
   tasks](https://theislab.github.io/scib-reproducibility/) (immune, pancreas,
-  lung atlases) — standard, small, cell-type labeled, multi-batch, and already
-  the comparison point for every batch-correction baseline.
+  lung atlases) — standard, small, cell-type labeled, multi-batch, and
+  already the comparison point for every batch-correction baseline.
 - **Public domain validation (used above):** Jerber et al. 2021, *Nat Genet*,
   population-scale scRNA-seq across dopaminergic neuron differentiation
   (HipSci, multiplexed across differentiation pools) —

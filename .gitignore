@@ -10,3 +10,6 @@ venv/
 *.pt
 *.ckpt
 .DS_Store
+*.log
+/checkpoints/
+/scGPT_CP/

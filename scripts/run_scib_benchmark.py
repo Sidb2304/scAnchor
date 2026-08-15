@@ -77,7 +77,7 @@ def download_if_needed(url: str, dest: Path) -> None:
     urllib.request.urlretrieve(url, dest)
 
 
-def build_config(ref_path: Path, held_out_path: Path, out_dir: Path, embed_dim: int) -> dict:
+def build_config(ref_path: Path, held_out_path: Path, out_dir: Path, embed_dim: int, seed: int) -> dict:
     return {
         "reference_panel": {
             "paths": [str(ref_path)],
@@ -96,7 +96,7 @@ def build_config(ref_path: Path, held_out_path: Path, out_dir: Path, embed_dim: 
             "discriminator_hidden_dim": 128,
         },
         "training": {
-            "seed": RNG_SEED,
+            "seed": seed,
             "batch_size": 512,
             "epochs": 30,
             "learning_rate": 1e-3,
@@ -131,6 +131,7 @@ def main() -> None:
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--data-cache-dir", required=True, type=Path)
     parser.add_argument("--scgpt-batch-size", type=int, default=64)
+    parser.add_argument("--seed", type=int, default=RNG_SEED)
     args = parser.parse_args()
 
     spec = DATASETS[args.dataset]
@@ -206,9 +207,9 @@ def main() -> None:
     reference.write_h5ad(ref_path)
     held_out.write_h5ad(held_out_path)
 
-    config = build_config(ref_path, held_out_path, args.out_dir, embedded.obsm["X_scGPT"].shape[1])
+    config = build_config(ref_path, held_out_path, args.out_dir, embedded.obsm["X_scGPT"].shape[1], args.seed)
 
-    print(f"\n[{args.dataset}] === training scAnchor (mmd_weight=20, current default) ===")
+    print(f"\n[{args.dataset}] === training scAnchor (mmd_weight=20, current default, seed={args.seed}) ===")
     t0 = time.time()
     train(config)
     print(f"[{args.dataset}] training done  ({time.time() - t0:.0f}s elapsed)")
@@ -232,8 +233,8 @@ def main() -> None:
     print(f"[{args.dataset}] harmony done  ({time.time() - t0:.0f}s elapsed)")
     print(harmony_result)
 
-    print(f"\n[{args.dataset}] === SUMMARY ===")
-    print({**scanchor_result, **harmony_result})
+    print(f"\n[{args.dataset}] === SUMMARY (seed={args.seed}) ===")
+    print({"dataset": args.dataset, "seed": args.seed, **scanchor_result, **harmony_result})
 
 
 if __name__ == "__main__":

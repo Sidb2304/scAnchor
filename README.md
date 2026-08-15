@@ -43,11 +43,14 @@ validated on the standard scIB atlas-level benchmarks (immune, pancreas,
 lung) in addition to the two datasets this project assembled itself:
 consistently beats Harmony on cell-type purity across all three (seed-
 checked, 3 seeds each), with a more mixed, dataset- and seed-dependent
-result on batch-mixing. The adversarial discriminator and
-split-latent architecture are still in the codebase
-(`adversarial_weight`/`absorption_weight` > 0) for comparison, not because
-either is recommended. See **Current results** before relying on this for
-anything beyond experimentation.
+result on batch-mixing. Also compared against scDisInFact — the one
+counts-based, condition-disentangling method judged worth attempting (see
+Next steps) — on a genuinely independent public dataset (Stephenson et
+al. 2021): no method wins cleanly there either, each fails differently.
+The adversarial discriminator and split-latent architecture are still in
+the codebase (`adversarial_weight`/`absorption_weight` > 0) for
+comparison, not because either is recommended. See **Current results**
+before relying on this for anything beyond experimentation.
 
 ## Current results
 
@@ -570,6 +573,59 @@ is real but not a clean win — it's dataset-dependent, and for immune
 specifically, seed-dependent too. Reporting both rather than only the
 favorable single seed.
 
+**Stephenson et al. 2021 COVID PBMC atlas — a genuinely independent public
+dataset, and the first real three-way comparison including scDisInFact.**
+Every result above used either datasets this project assembled itself
+(Levy, Jerber) or the scIB atlas tasks. A real comparison against
+scDisInFact (see Next steps for why it was the only one of the three
+counts-based methods worth attempting) needed a public dataset with an
+independent condition variable — none of Levy/Jerber/scIB have one.
+Verified directly from the file (not the paper's description) that
+Stephenson et al. 2021 (*Nat Med*, COVID-19 PBMC atlas) has `Site` (3
+processing sites, used as batch), `Status` (Covid/Healthy/LPS/Non_covid,
+used as scDisInFact's condition variable), and `donor_id` — but every donor
+appears at exactly one site, so donor and batch are fully confounded here;
+not suitable for scAnchor's donor-consistency mechanism (`donor_col`
+deliberately omitted, same treatment as the scIB tasks), only for the
+batch-mixing/cell-type-purity comparison run here.
+
+Subsampled by donor (175 cells/donor cap, seed 0) to 21,000 cells across
+120 donors — identical cells for every method compared. Held out the
+smallest site (Sanger) for scAnchor's zero-shot leave-one-batch-out test;
+Harmony gets transductive access to the full combined set (its own
+established fair-comparison protocol, per above); scDisInFact trains on
+all sites/conditions jointly — it has no zero-shot/held-out protocol in
+this codebase, so its number is in-sample, an easier task than scAnchor's,
+not a matched comparison, flagged rather than glossed over:
+
+| method | batch-mixing purity (lower=better) | cell-type kNN purity (higher=better) |
+|---|---|---|
+| raw embedding, no correction | 0.7306 | 0.6213 |
+| **scAnchor** (`mmd_weight=20`, zero-shot on held-out site) | 0.8501 (worse) | **0.7059** (better) |
+| Harmony (transductive) | 0.7358 (worse) | 0.6158 (worse) |
+| **scDisInFact** (in-sample, condition-disentangled cVAE) | **0.6620** (better) | 0.4755 (worse) |
+
+**No method wins cleanly — each fails differently:**
+- scAnchor's batch-mixing regression is real and larger here than on the
+  scIB atlases, but its cell-type-purity gain (+0.085) is the largest of
+  any method tested on this dataset, achieved zero-shot on cells never
+  seen during training.
+- Harmony essentially did nothing useful here: batch-mixing barely moved
+  (in the wrong direction) and cell-type purity got worse, despite having
+  full transductive access to every batch, including the held-out one.
+- scDisInFact is the only method that genuinely improved batch-mixing —
+  the whole point of its condition/batch disentangling — but paid for it
+  with by far the worst cell-type purity of the four rows, on an easier
+  (in-sample) evaluation than scAnchor's.
+
+Consistent with, not a departure from, every other trade-off documented in
+this README: something that improves batch-mixing tends to cost cell-type
+purity and vice versa, and which method looks best depends entirely on
+which side of that trade-off a given use case cares about more.
+Reproducible via `scripts/run_stephenson_benchmark.py` (scAnchor +
+Harmony) and `scripts/run_scdisinfact_stephenson.py` (scDisInFact), both
+driven by `scripts/submit_uger_stephenson.sh`.
+
 ## Install
 
 ```bash
@@ -720,13 +776,20 @@ these — they're the concrete roadmap, not a hidden gap:
      troubleshooting on this cluster, for a method that (like scVI)
      trains on raw counts anyway. Not worth the risk for likely the same
      kind of result the scVI baseline already gives.
-   - **scDisInFact** is the one worth attempting: lightweight, plain-torch
-     dependencies (no scvi-tools at all), maintained within the last year,
-     and — unlike scVI — its actual purpose is disentangling batch/
-     condition effects, closer in spirit to scAnchor's covariate
-     conditioning than a general integration tool. Not on PyPI (needs a
-     source clone); scoping the real integration effort (adapting its
-     non-AnnData, raw-counts API to this project's data) is in progress.
+   - **scDisInFact** was the one worth attempting, and has now been run
+     end-to-end against scAnchor and Harmony on a real public dataset
+     (Stephenson et al. 2021 — see Current results): lightweight,
+     plain-torch dependencies (no scvi-tools at all), and — unlike scVI —
+     its actual purpose is disentangling batch/condition effects, closer
+     in spirit to scAnchor's covariate conditioning than a general
+     integration tool. Verdict: it's the only method of the three that
+     genuinely improved batch-mixing there, at a real cost to cell-type
+     purity — no method won cleanly, see Current results for the honest
+     three-way comparison.
+4. **scAnchor's batch-mixing regression on Stephenson was the largest seen
+   on any dataset in this project.** Worth understanding whether that's
+   this dataset's specific donor×site confound, its 4-way `Status`
+   imbalance, or something else — not yet isolated.
 
 ## Reference panel
 
@@ -743,6 +806,15 @@ these — they're the concrete roadmap, not a hidden gap:
   https://zenodo.org/record/4651413 (day11.h5.zip used here, ~3.1GB
   compressed / ~11.7GB uncompressed; day30/day52 not yet tried, see Next
   steps).
+- **Public domain validation (used above):** Stephenson et al. 2021,
+  *Nat Med*, single-cell multi-omics analysis of the immune response in
+  COVID-19 — https://doi.org/10.1038/s41591-021-01329-2. CELLxGENE-hosted
+  h5ad (647,366 cells, 3 processing sites, 4 disease-status categories, 120
+  donors): https://datasets.cellxgene.cziscience.com/fe2e847c-1602-4f1b-86a4-112e4dc7a8e3.h5ad.
+  `var_names` in this file are Ensembl IDs, not gene symbols — real symbols
+  are in `var["feature_name"]`; raw counts are in `.raw.X`, not `.X` (both
+  confirmed directly from the file, not assumed — see
+  `scripts/run_stephenson_benchmark.py`'s `build_subsample()`).
 
 ## References
 

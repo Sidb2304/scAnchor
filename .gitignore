@@ -13,3 +13,4 @@ venv/
 *.log
 /checkpoints/
 /scGPT_CP/
+/scDisInFact/

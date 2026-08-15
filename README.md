@@ -41,8 +41,9 @@ regression and, at higher weights, beats the Harmony baseline on the same
 metric — but trades away cell-type purity in exchange. Since then,
 validated on the standard scIB atlas-level benchmarks (immune, pancreas,
 lung) in addition to the two datasets this project assembled itself:
-consistently beats Harmony on cell-type purity across all three, with a
-more mixed result on batch-mixing. The adversarial discriminator and
+consistently beats Harmony on cell-type purity across all three (seed-
+checked, 3 seeds each), with a more mixed, dataset- and seed-dependent
+result on batch-mixing. The adversarial discriminator and
 split-latent architecture are still in the codebase
 (`adversarial_weight`/`absorption_weight` > 0) for comparison, not because
 either is recommended. See **Current results** before relying on this for
@@ -517,35 +518,57 @@ already supported: the failure mode here is mechanism/metric-specific, not
 a property of the dataset that makes batch-mixing improvement generally
 incompatible with preserving biological signal.
 
-**Validated on the standard scIB atlas-level benchmarks — a real win on
-cell-type purity, a mixed result on batch-mixing.** Every result above used
-datasets this project assembled itself (Levy, Jerber). The scIB atlas-level
-integration benchmarks (immune, pancreas, lung — the standard reference
-point every batch-correction method in the field gets compared against)
-were flagged as "not yet run" since this project's start. Ran the shipped
-default config (`mmd_weight=20`) plus a Harmony baseline on all three, via
-`scripts/run_scib_benchmark.py` on a UGER cluster (see that script and
-`scripts/submit_uger_scib.sh` for the full pipeline):
+**Validated on the standard scIB atlas-level benchmarks, seed-checked — a
+robust win on cell-type purity, a genuinely seed-sensitive result on
+batch-mixing.** Every result above used datasets this project assembled
+itself (Levy, Jerber). The scIB atlas-level integration benchmarks
+(immune, pancreas, lung — the standard reference point every
+batch-correction method in the field gets compared against) were flagged
+as "not yet run" since this project's start. Ran the shipped default
+config (`mmd_weight=20`) plus a Harmony baseline on all three at 3 seeds
+each, via `scripts/run_scib_benchmark.py` on a UGER cluster (see that
+script, `scripts/submit_uger_scib.sh`, and `scripts/submit_uger_scib_seeds.sh`
+for the full pipeline):
 
-| dataset | batch-mixing before → after (scAnchor) | Harmony | cell-type before → after (scAnchor) | Harmony |
-|---|---|---|---|---|
-| pancreas (16,382 cells) | 0.729 → 0.596 | **0.567** | 0.798 → **0.870** | 0.787 |
-| lung (32,472 cells) | 0.648 → 0.643 | **0.638** | 0.886 → **0.924** | 0.862 |
-| immune (33,506 cells) | 0.712 → 0.713 | 0.730 (worse than baseline) | 0.875 → **0.924** | 0.880 |
+| dataset | seed | batch-mixing after (scAnchor) | Harmony | cell-type after (scAnchor) | Harmony |
+|---|---|---|---|---|---|
+| pancreas | 0 | 0.596 | 0.567 | 0.870 | 0.787 |
+| pancreas | 1 | 0.598 | 0.565 | 0.876 | 0.790 |
+| pancreas | 2 | 0.600 | 0.564 | 0.869 | 0.789 |
+| lung | 0 | 0.643 | 0.638 | 0.924 | 0.862 |
+| lung | 1 | **0.633** | 0.640 | 0.926 | 0.864 |
+| lung | 2 | 0.643 | 0.639 | 0.923 | 0.863 |
+| immune | 0 | 0.713 | 0.730 | 0.924 | 0.880 |
+| immune | 1 | 0.712 | 0.730 | 0.923 | 0.881 |
+| immune | 2 | **0.731** | 0.730 | 0.923 | 0.880 |
 
-**scAnchor beats Harmony on cell-type purity on all three datasets,
-consistently** — and does it in inductive mode (the held-out batch was
-never seen during training), against Harmony's transductive mode (full
-access to every batch at correction time). Batch-mixing is more mixed:
-Harmony wins on pancreas and (narrowly) lung, but on immune Harmony
-actually does *worse* than doing nothing at all (0.730 vs. 0.712 before),
-while scAnchor stays flat. This is the most direct, standard-benchmark
-evidence so far that the trade-off documented throughout this project
-(batch-mixing vs. cell-type preservation) is real and consistent, not an
-artifact of the two datasets this project happened to assemble itself —
-and that scAnchor's side of that trade-off (favoring cell-type/biological
-signal) holds up against an established external baseline on data neither
-was tuned for. Single seed, one run each — see Next steps.
+(before-correction baseline per dataset, all seeds: pancreas 0.729/0.798,
+lung ~0.647/0.886, immune ~0.712/0.875 batch-mixing/cell-type)
+
+**Cell-type purity: robust, 9/9.** scAnchor beats Harmony on cell-type
+purity at every seed on every dataset, with tight margins throughout —
+this part of the result is not a single-seed accident.
+
+**Batch-mixing: real, and more seed-sensitive than the single-seed result
+suggested.** Three different patterns, not one:
+- **Pancreas**: Harmony wins consistently across all 3 seeds — a clean,
+  replicated result in Harmony's favor.
+- **Lung**: genuinely too close to call. Harmony is narrowly ahead at
+  seeds 0 and 2 (~0.638-0.639 vs. scAnchor's 0.643), but at seed 1
+  scAnchor actually beats Harmony (0.633 vs. 0.640). Neither method
+  dominates here.
+- **Immune**: 2 of 3 seeds reproduce the original story (scAnchor stays
+  flat near baseline while Harmony regresses below it), but **seed 2
+  shows scAnchor also regressing**, landing at 0.731 — essentially
+  matching Harmony's regression (0.730). A real instability in one of
+  three seeds, not smoothed over: this specific dataset/mechanism
+  combination isn't reliably better than doing nothing on batch-mixing.
+
+Honest bottom line: the cell-type-purity advantage is the part of this
+result worth trusting broadly. The batch-mixing comparison against Harmony
+is real but not a clean win — it's dataset-dependent, and for immune
+specifically, seed-dependent too. Reporting both rather than only the
+favorable single seed.
 
 ## Install
 
@@ -675,11 +698,11 @@ these — they're the concrete roadmap, not a hidden gap:
    and the direction of biological maturity (progenitor→mature vs.
    mature→progenitor, which the two-dataset design also can't separate from
    "which study is which"). Also still single-seed, one dataset pair.
-3. **Seed-check the scIB benchmark results.** Single seed, one run each —
-   the cell-type-purity win over Harmony was consistent across all three
-   datasets, which is a good sign, but "consistent across datasets at one
-   seed" isn't the same guarantee as the seed-robustness check already done
-   for the core MMD dose-response result.
+3. **Compare against the actual competing category of methods** (scDisInFact,
+   CODAL, sysVI — cited in References below but never run). Harmony/scVI
+   are transductive, a different setting by design; a real comparison
+   against other *inductive* methods is the one still missing for a
+   complete picture of where this stands in its actual category.
 
 ## Reference panel
 

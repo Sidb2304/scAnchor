@@ -5,6 +5,16 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.1.1] - 2026-08-16
+
+Packaging/distribution milestone, not a new finding -- same treatment as
+1.0.0's API-stability milestone. First version published to PyPI
+(`pip install scanchor`), via trusted publishing (OIDC, no stored token)
+triggered on this release. Added PyPI-facing metadata to `pyproject.toml`
+(classifiers, project URLs) and confirmed the package builds correctly
+(`python -m build`) and the name `scanchor` was unclaimed before wiring up
+the automation.
+
 ## [1.1.0] - 2026-08-16
 
 ### Added

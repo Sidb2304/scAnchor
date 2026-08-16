@@ -14,3 +14,8 @@ venv/
 /checkpoints/
 /scGPT_CP/
 /scDisInFact/
+/dist/
+/build/
+/geneformer_feasibility/geneformer_repo/
+/geneformer_feasibility/tokenized/
+/geneformer_feasibility/embeddings_out/

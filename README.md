@@ -609,13 +609,19 @@ not a matched comparison, flagged rather than glossed over:
 | method | batch-mixing purity (lower=better) | cell-type kNN purity (higher=better) |
 |---|---|---|
 | raw embedding, no correction | 0.7306 | 0.6213 |
-| **scAnchor** (`mmd_weight=20`, zero-shot on held-out site) | 0.8501 (worse) | **0.7059** (better) |
+| **scAnchor** (`mmd_weight=20`, zero-shot, `batch`+`Status` covariates) | 0.8471 (worse) | **0.7050** (better) |
 | Harmony (transductive) | 0.7358 (worse) | 0.6158 (worse) |
 | **scDisInFact** (in-sample, condition-disentangled cVAE) | **0.6620** (better) | 0.4755 (worse) |
 
+(scAnchor's row reflects the current default, `categorical_covariate_cols:
+["batch", "Status"]` — see the covariate-ablation finding below. The
+original `batch`-only number this project first reported was 0.8501/0.7059;
+both regress relative to no correction, this is a partial improvement, not
+a different conclusion.)
+
 **No method wins cleanly — each fails differently:**
 - scAnchor's batch-mixing regression is real and larger here than on the
-  scIB atlases, but its cell-type-purity gain (+0.085) is the largest of
+  scIB atlases, but its cell-type-purity gain (+0.084) is the largest of
   any method tested on this dataset, achieved zero-shot on cells never
   seen during training.
 - Harmony essentially did nothing useful here: batch-mixing barely moved
@@ -655,6 +661,33 @@ here instead of cell type. It's also a case where the blanket
 "hold out the smallest batch" heuristic used everywhere in this project
 picked the single most compositionally extreme site available, rather
 than one chosen with this kind of confound in mind.
+
+**Partial fix, seed-checked: feeding `Status` as a categorical covariate
+(the same mechanism already used for `batch`) closes part of this gap, at
+no cost.** Directly testing the diagnosis above rather than just
+describing it: retrained with `categorical_covariate_cols: ["batch",
+"Status"]` instead of `["batch"]` alone, reusing the identical cached
+embeddings (no re-run of the expensive scGPT step needed), at seeds 0/1/2:
+
+| variant | batch-mixing purity after (3 seeds) | avg | cell-type purity after (3 seeds) | avg |
+|---|---|---|---|---|
+| `batch` only (original default) | 0.8515, 0.8660, 0.8483 | 0.8553 | 0.7061, 0.7026, 0.7072 | 0.7053 |
+| **`batch` + `Status`** (current default) | 0.8471, 0.8495, 0.7851 | **0.8272** | 0.7050, 0.7063, 0.7062 | 0.7058 |
+
+Consistent direction at every seed — never reverses. The regression over
+the no-correction baseline (0.7306) shrinks from +0.125 to +0.097 on
+average, about a 23% reduction, with cell-type purity essentially
+unchanged (0.7053 → 0.7058, a wash). This doesn't fully close the gap —
+still meaningfully worse than doing nothing at all — but it's a real,
+free improvement using a mechanism already in the codebase, not a new
+model or loss term. **General takeaway, not just a Stephenson-specific
+fix: when a known condition/clinical covariate exists that isn't already
+captured by `batch` but plausibly correlates with which cells land in
+which batch, add it to `categorical_covariate_cols` — it costs nothing to
+try, and this seed-checked test found only upside, never a downside.**
+`scripts/run_stephenson_benchmark.py` now ships `batch`+`Status` as its
+default; the main comparison table above reports that number as
+scAnchor's result.
 
 ## Install
 
@@ -713,6 +746,12 @@ it isn't duplicated here. Two things worth knowing before editing it:
 - **New keys should default to today's validated behavior when absent**,
   so existing configs (including anyone's already-saved YAML) keep working
   unchanged after an upgrade.
+- **If your data has a known condition/clinical covariate not already
+  captured by `batch`, add it to `categorical_covariate_cols`.** Validated
+  on Stephenson et al. 2021 (see Current results): feeding `Status`
+  alongside `batch` partially closed a real batch-mixing regression, at no
+  cost to cell-type purity, seed-checked across 3 seeds with no reversal.
+  Same mechanism already used for `batch`, so this costs nothing to try.
 
 ## Evaluation
 

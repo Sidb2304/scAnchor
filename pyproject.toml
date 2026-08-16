@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scanchor"
-version = "1.0.0"
+version = "1.1.0"
 description = "Inductive batch correction for frozen single-cell foundation model embeddings"
 readme = "README.md"
 license = { text = "MIT" }

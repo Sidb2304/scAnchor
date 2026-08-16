@@ -126,7 +126,14 @@ def build_config(ref_path: Path, held_out_path: Path, out_dir: Path, embed_dim: 
             "embedding_key": "X_scGPT",
             "cell_type_col": "cell_type",
             "batch_col": "batch",
-            "categorical_covariate_cols": ["batch"],
+            # "Status" (Covid/Healthy/LPS/Non_covid) added alongside batch
+            # after a real, seed-checked (0/1/2) ablation found it partially
+            # closes the batch-mixing regression documented in README's
+            # Current results (v0.9.1) -- consistent direction at every
+            # seed, no cost to cell-type purity. Doesn't fully close the
+            # gap, but a genuine, free win via the same mechanism already
+            # used for batch.
+            "categorical_covariate_cols": ["batch", "Status"],
             "continuous_covariate_cols": ["total_counts", "pct_counts_mt"],
         },
         "model": {
@@ -195,7 +202,7 @@ def main() -> None:
         out_path=args.out_dir / "embedded.h5ad",
         gene_col="gene_name",
         batch_size=args.scgpt_batch_size,
-        obs_to_save=["batch", "cell_type", "total_counts", "pct_counts_mt"],
+        obs_to_save=["batch", "cell_type", "total_counts", "pct_counts_mt", "Status"],
         device=device,
         use_fast_transformer=(device == "cuda"),
     )

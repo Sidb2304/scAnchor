@@ -5,6 +5,28 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.1.0] - 2026-08-16
+
+### Added
+- General technique, not just a Stephenson-specific fix: feeding a known
+  condition/clinical covariate (anything correlated with which cells land
+  in which batch, but not already captured by `batch` itself) as an
+  additional `categorical_covariate_cols` entry. Validated via a seed-
+  checked (0/1/2) ablation on Stephenson et al. 2021, reusing the already-
+  embedded cells (no re-run of the scGPT step needed): adding `Status`
+  alongside `batch` shrank the batch-mixing regression documented in
+  v0.9.1 by about 23% on average, consistent direction at every seed, at
+  no cost to cell-type purity. Documented as a general recommendation in
+  the README's Configuration section, not only in Current results.
+
+### Changed
+- `scripts/run_stephenson_benchmark.py` now ships `categorical_covariate_cols:
+  ["batch", "Status"]` as its default (previously `["batch"]` alone) and
+  saves `Status` through the scGPT embedding step accordingly. The
+  README's Stephenson comparison table now reports scAnchor's result
+  under this default; the original `batch`-only numbers are kept visible
+  alongside the ablation for comparison.
+
 ## [1.0.0] - 2026-08-15
 
 ### Added

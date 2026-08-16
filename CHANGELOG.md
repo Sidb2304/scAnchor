@@ -5,6 +5,25 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.1.2] - 2026-08-16
+
+Real, verified finding, not just documentation: a plain `pip install
+scanchor` fails on older HPC clusters (RHEL7-era, old GCC/glibc) because
+`scanpy`/`anndata` transitively pull in unpinned `pandas`/`h5py`, which
+stop shipping prebuilt wheels for old glibc past certain versions and fail
+to build from source -- the exact same class of failure this project's
+own cluster scripts had to work around repeatedly (pandas 2.3.3's
+meson/cython build needing C99 support this cluster's GCC doesn't have by
+default). Reproduced directly on this project's own cluster, then
+verified the fix (`pip install "pandas<2.3" "h5py==3.14.0"` before
+`pip install scanchor`) actually resolves it end-to-end, including a
+successful `import scanchor`.
+
+Documented in the README's Install section rather than pinned in
+`pyproject.toml`'s own dependencies -- pinning globally would needlessly
+hold back `pandas`/`h5py` for the majority of users on modern systems
+where newer versions install from wheels without any issue.
+
 ## [1.1.1] - 2026-08-16
 
 Packaging/distribution milestone, not a new finding -- same treatment as

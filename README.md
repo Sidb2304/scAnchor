@@ -692,9 +692,30 @@ scAnchor's result.
 ## Install
 
 ```bash
-pip install -e ".[scgpt]"       # embedding extraction via scGPT
-pip install -e ".[baselines]"   # Harmony / scVI / scib for comparison
+pip install scanchor                     # core package, from PyPI
+pip install scanchor[scgpt]              # + embedding extraction via scGPT
+pip install scanchor[baselines]          # + Harmony / scVI / scib for comparison
 ```
+
+For local development, `pip install -e ".[scgpt]"` from a repo clone instead.
+
+**Older HPC clusters (RHEL7-era, old GCC/glibc):** a plain `pip install
+scanchor` can fail while building `pandas` from source
+(`ERROR: Compiler cython cannot compile programs` or similar) — some
+`pandas`/`h5py` releases stop shipping prebuilt wheels for old glibc, and
+this old-toolchain problem is exactly what this project's own cluster
+scripts had to work around repeatedly (see git history). Verified fix,
+tested on the same cluster this project runs on: pre-install known-good
+pinned versions first, *then* install scanchor —
+
+```bash
+pip install "pandas<2.3" "h5py==3.14.0"
+pip install scanchor
+```
+
+This isn't pinned in `scanchor`'s own dependencies by default, since it
+would unnecessarily hold back `pandas`/`h5py` for the majority of users on
+modern systems where newer versions install from wheels just fine.
 
 Download a scGPT checkpoint from the [model zoo](https://github.com/bowang-lab/scGPT#pretrained-scgpt-model-zoo)
 — use **`continual pretrained`**, not `brain` or `whole-human` (see Current

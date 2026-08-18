@@ -7,6 +7,7 @@ from scanchor.model.losses import (
     correction_loss,
     donor_consistency_loss,
     mmd_loss,
+    sinkhorn_ot_loss,
     supervised_contrastive_loss,
     variance_floor_penalty,
 )
@@ -53,13 +54,14 @@ def test_correction_loss_combines_both_terms():
     assert torch.isfinite(total)
     assert set(metrics.keys()) == {
         "contrastive", "variance_penalty", "donor_consistency",
-        "adversarial_batch", "batch_absorption", "mmd", "conditional_mmd", "total",
+        "adversarial_batch", "batch_absorption", "mmd", "conditional_mmd", "sinkhorn_ot", "total",
     }
     assert metrics["donor_consistency"] == 0.0  # no donor_ids passed -> term is inert
     assert metrics["adversarial_batch"] == 0.0  # no batch_logits passed -> term is inert
     assert metrics["batch_absorption"] == 0.0  # no absorber_logits passed -> term is inert
     assert metrics["mmd"] == 0.0  # no batch_ids passed -> term is inert
     assert metrics["conditional_mmd"] == 0.0  # no batch_ids passed -> term is inert
+    assert metrics["sinkhorn_ot"] == 0.0  # no batch_ids passed -> term is inert
 
 
 def test_donor_consistency_loss_zero_when_no_cross_batch_positive():
@@ -408,3 +410,85 @@ def test_correction_loss_conditional_mmd_term_inert_when_weight_zero():
     assert metrics_no_cmmd["conditional_mmd"] == metrics_with_cmmd["conditional_mmd"]
     assert metrics_with_cmmd["conditional_mmd"] > 0.0
     assert total_with_cmmd.item() > total_no_cmmd.item()
+
+
+def test_sinkhorn_ot_loss_zero_with_single_batch():
+    embeddings = torch.randn(10, 8)
+    batch_ids = torch.zeros(10, dtype=torch.long)
+
+    loss = sinkhorn_ot_loss(embeddings, batch_ids)
+
+    assert loss.item() == 0.0
+
+
+def test_sinkhorn_ot_loss_finite_and_nonnegative_across_shifted_batches():
+    torch.manual_seed(0)
+    x = torch.randn(10, 8)
+    y = torch.randn(10, 8) + 5.0  # clearly separated distribution
+    embeddings = torch.cat([x, y], dim=0)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+
+    loss = sinkhorn_ot_loss(embeddings, batch_ids)
+
+    assert torch.isfinite(loss)
+    assert loss.item() >= 0.0
+
+
+def test_sinkhorn_ot_loss_smaller_when_batches_already_aligned():
+    torch.manual_seed(0)
+    x = torch.randn(10, 8)
+    aligned = torch.cat([x, x + 0.01 * torch.randn(10, 8)], dim=0)
+    shifted = torch.cat([x, x + 5.0], dim=0)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
+
+    aligned_loss = sinkhorn_ot_loss(aligned, batch_ids)
+    shifted_loss = sinkhorn_ot_loss(shifted, batch_ids)
+
+    assert aligned_loss.item() < shifted_loss.item()
+
+
+def test_sinkhorn_ot_loss_ignores_batches_with_fewer_than_two_cells():
+    torch.manual_seed(0)
+    embeddings = torch.randn(11, 8)
+    batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.tensor([1])])
+
+    loss = sinkhorn_ot_loss(embeddings, batch_ids)
+
+    assert loss.item() == 0.0
+
+
+def test_sinkhorn_ot_loss_finite_not_nan_over_many_iterations():
+    """Regression test for the real accumulation bug found during the
+    architecture experiment this was ported from: the dual updates must
+    REPLACE f/g each iteration, not accumulate onto the previous value.
+    Accumulating diverges to NaN well within 50 iterations regardless of
+    epsilon or cost scale -- run enough iterations that the old, buggy
+    version would already have failed."""
+    torch.manual_seed(0)
+    x = torch.randn(15, 8)
+    y = torch.randn(15, 8) + 3.0
+    embeddings = torch.cat([x, y], dim=0)
+    batch_ids = torch.cat([torch.zeros(15, dtype=torch.long), torch.ones(15, dtype=torch.long)])
+
+    loss = sinkhorn_ot_loss(embeddings, batch_ids, n_iters=100)
+
+    assert torch.isfinite(loss)
+
+
+def test_correction_loss_sinkhorn_term_inert_when_weight_zero():
+    torch.manual_seed(0)
+    original = torch.randn(10, 8)
+    corrected = original + 5.0 * torch.randn(10, 8)
+    labels = torch.randint(0, 3, (10,))
+    batch_ids = torch.cat([torch.zeros(5, dtype=torch.long), torch.ones(5, dtype=torch.long)])
+
+    total_no_sinkhorn, metrics_no_sinkhorn = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, sinkhorn_weight=0.0
+    )
+    total_with_sinkhorn, metrics_with_sinkhorn = correction_loss(
+        original, corrected, labels, batch_ids=batch_ids, sinkhorn_weight=1.0
+    )
+
+    assert metrics_no_sinkhorn["sinkhorn_ot"] == metrics_with_sinkhorn["sinkhorn_ot"]  # same value computed either way
+    assert metrics_with_sinkhorn["sinkhorn_ot"] > 0.0
+    assert total_with_sinkhorn.item() > total_no_sinkhorn.item()  # weight 1 pulls it into total, weight 0 doesn't

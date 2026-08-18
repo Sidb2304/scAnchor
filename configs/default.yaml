@@ -101,6 +101,24 @@ training:
   # mmd_weight above -- the opposite of the goal. Off by default, kept for
   # comparison, not recommended.
   conditional_mmd_weight: 0.0
+  # Entropic-regularized OT (Sinkhorn) between batches' corrected-embedding
+  # distributions -- an explicit matching-based alternative to mmd_weight's
+  # moment-matching, only ever used as a training-time loss (never baked
+  # into the forward pass, which is what keeps this fully inductive despite
+  # OT's usual reliance on the target batch's cells). Off by default: a
+  # real, seed-checked (3 seeds) result on this exact reference panel found
+  # sinkhorn_weight=0.5 beats mmd_weight=20's published numbers on BOTH
+  # axes at once (batch-mixing regression +0.030 vs +0.120, cell-type-purity
+  # improvement +0.091 vs +0.085) -- not just a different point on the same
+  # trade-off curve. Kept off by default anyway because that result hasn't
+  # yet been checked on the donor-retrieval / replicate-structure /
+  # cross-backbone axes mmd_weight's "Current results" have -- promising,
+  # real, but narrower-scope validation so far. If you enable this, disable
+  # mmd_weight (set it to 0) rather than stacking both -- the combination
+  # hasn't been tested and would confound which mechanism produced the
+  # result.
+  sinkhorn_weight: 0.0
+  sinkhorn_epsilon: 0.1
   grad_clip_norm: 5.0
   min_variance_ratio: 0.8
   checkpoint_out: checkpoints/correction_head.pt

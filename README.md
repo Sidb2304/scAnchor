@@ -36,16 +36,25 @@ Validated end-to-end against real data, both datasets this project
 assembled itself and public ones (scIB atlases, Stephenson et al. 2021).
 The batch-mixing-vs-cell-type-purity trade-off documented throughout this
 README is a structural property of the problem this project has
-consistently found, not a bug still waiting to be fixed: every mechanism
-tried — adversarial discriminator, split-latent architecture, global MMD,
-class-conditional MMD, multi-scale MMD — lands somewhere on that same
-curve, never off of it. This project's contribution is characterizing
-that curve honestly with real, seed-checked evidence and shipping a
-validated default, not claiming to have eliminated the trade-off. Also
-validated cross-backbone (see Current results): the same trade-off, at
-nearly identical magnitude, reproduces with Geneformer embeddings instead
-of scGPT — real evidence this is a property of the correction mechanism,
-not a scGPT-specific artifact.
+consistently found, not a bug still waiting to be fixed: every
+*moment-matching* mechanism tried — adversarial discriminator, split-latent
+architecture, global MMD, class-conditional MMD, multi-scale MMD — lands
+somewhere on that same curve, never off of it. This project's contribution
+is characterizing that curve honestly with real, seed-checked evidence and
+shipping a validated default, not claiming to have eliminated the
+trade-off. Also validated cross-backbone (see Current results): the same
+trade-off, at nearly identical magnitude, reproduces with Geneformer
+embeddings instead of scGPT — real evidence this is a property of the
+correction mechanism, not a scGPT-specific artifact.
+
+One mechanism from a genuinely different class *does* escape that curve on
+the dataset tested so far: entropic-regularized optimal transport
+(`sinkhorn_weight`, see Current results) beats the shipped MMD default on
+both batch-mixing and cell-type purity simultaneously, seed-checked. It
+ships in this release but stays off by default — real, but validated on
+one dataset/split so far, not yet checked against the broader validation
+(donor retrieval, replicate structure, cross-backbone) that earned MMD its
+default status.
 
 **Recommendation:** use the shipped default
 (`mmd_weight: 20`, `adversarial_weight: 0`, `absorption_weight: 0`) as a
@@ -734,6 +743,61 @@ CUDA-heavy conda environments, and a scheduler default that silently
 requested the wrong OS on GPU nodes) — none of which reflect on scAnchor's
 own code, but are documented in `geneformer_feasibility/` for anyone
 reproducing this.
+
+**Sinkhorn OT: an explicit matching-based mechanism that beats MMD on both
+axes at once, on this dataset — real, seed-checked, but narrower-scope
+than MMD's validation.** Every batch-mixing mechanism above (adversarial
+discriminator, every MMD variant) is a *moment-matching* loss — it only
+requires two batches' embedding distributions to share the same kernel
+statistics, which is why they all land on the same trade-off curve
+regardless of which specific loss is used. Entropic-regularized optimal
+transport (`sinkhorn_ot_loss` in `losses.py`) is a mechanism from a
+genuinely different class: it explicitly solves for an (entropy-smoothed)
+minimum-cost matching between every cell in one batch and every cell in
+another, rather than matching aggregate statistics. Like MMD, it's used
+only as a training-time loss — the transport plan itself is never part of
+the forward pass — so the correction head stays fully inductive.
+
+Swept `sinkhorn_weight` from 0.1 to 20 on the same Stephenson/scGPT
+reference panel and split as the published MMD numbers, seed-checked (3
+seeds) at the weights that looked promising:
+
+| sinkhorn_weight | batch-mixing purity: raw → after (Δ) | cell-type kNN purity: raw → after (Δ) |
+|---|---|---|
+| 0.1 | 0.731 → 0.780 (**+0.050**) | 0.621 → 0.723 (**+0.101**) |
+| 0.3 | 0.731 → 0.771 (**+0.040**) | 0.621 → 0.718 (**+0.096**) |
+| **0.5** | **0.731 → 0.761 (+0.030)** | **0.621 → 0.712 (+0.091)** |
+| 1.0 | 0.731 → 0.766 (+0.035) | 0.621 → 0.701 (+0.080) |
+| 2.0 | 0.731 → 0.768 (+0.038) | 0.621 → 0.683 (+0.061) |
+| mmd_weight=20 (published) | 0.731 → 0.850 (+0.120) | 0.621 → 0.706 (+0.085) |
+
+At `sinkhorn_weight=0.5` — the minimum of a smooth, well-behaved batch-
+mixing curve across the swept range, seed-checked with tight variance
+(std ≤0.008 on batch-mixing, ≤0.002 on cell-type purity across seeds
+0,1,2) — both metrics beat the published `mmd_weight=20` result
+simultaneously: batch-mixing regression is less than a quarter of MMD's,
+and cell-type-purity improvement is *better* than MMD's. This is not
+another point on the same trade-off curve; it's a real Pareto improvement
+on this dataset/split.
+
+Two things temper this before treating it as a replacement for MMD's
+default status:
+- **Weight range matters.** The smooth trade-off above only holds for
+  `sinkhorn_weight` ≲2. At weight≥10, both metrics degrade *together*
+  instead of trading off cleanly (a real, observed non-monotonic
+  instability) — unlike `mmd_weight`, which traces a predictable curve
+  across its entire validated range. Stay in the swept range.
+- **Narrower validation than MMD's.** This has only been run on the
+  Stephenson/scGPT panel above. It has not yet been checked against the
+  donor-retrieval, replicate-structure, or cross-backbone axes that earned
+  `mmd_weight` its default status — see **Configuration** for why it ships
+  off by default (`sinkhorn_weight: 0.0`) despite this result.
+
+The isolated architecture experiment this was ported from (including the
+neighbor-attention idea that did *not* beat MMD, and the debugging history
+of a real Sinkhorn dual-update bug) lives in a separate, ungitted sibling
+directory (`scanchor-architecture-experiment/`, outside this repo) kept
+around for further exploration — not part of this package.
 
 ## Install
 

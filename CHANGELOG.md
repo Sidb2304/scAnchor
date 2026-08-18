@@ -5,6 +5,44 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.3.0] - 2026-08-18
+
+New batch-mixing mechanism, `sinkhorn_weight` (entropic-regularized
+optimal transport), added and shipped off by default. Every mechanism
+validated before this one was a *moment-matching* loss (adversarial
+discriminator, every MMD variant) and all of them landed on the same
+batch-mixing-vs-cell-type-purity trade-off curve regardless of the
+specific loss used. Sinkhorn is a matching-based mechanism from a
+genuinely different class, motivated by the same evidence that motivated
+trying neighbor-attention: since every moment-matching variant traced the
+same curve, the limitation looked like it could be about mechanism class,
+not the specific loss.
+
+Real result on the Stephenson/scGPT reference panel (same dataset/split
+as the published MMD numbers), seed-checked (3 seeds) across a weight
+sweep from 0.1 to 20: at `sinkhorn_weight=0.5`, both batch-mixing
+regression (+0.030 vs. MMD's +0.120) and cell-type-purity improvement
+(+0.091 vs. MMD's +0.085) beat the published `mmd_weight=20` result
+simultaneously — a genuine Pareto improvement on this dataset, not
+another point on the same curve. Also found: the mechanism is
+non-monotonic outside `sinkhorn_weight`≲2 (both metrics degrade together
+at weight≥10, a real instability), so the validated range is narrower
+than MMD's.
+
+Shipped off by default (`sinkhorn_weight: 0.0`) despite the positive
+result: it has only been validated on one dataset/split so far, not yet
+checked against the donor-retrieval, replicate-structure, or
+cross-backbone axes that earned MMD its default status. A real,
+seed-checked bug was also found and fixed during development (the
+Sinkhorn dual-update iteration accumulated instead of replacing f/g each
+step, diverging to NaN regardless of epsilon) — covered by a regression
+test (`test_sinkhorn_ot_loss_finite_not_nan_over_many_iterations`).
+
+Ported from an isolated, ungitted architecture-experiment copy (kept
+around separately, outside this repo, for further exploration — not part
+of this package) that also tested a neighbor-attention correction head;
+that idea did not beat MMD and was not ported.
+
 ## [1.2.0] - 2026-08-18
 
 Cross-backbone validation: does scAnchor's characterized batch-vs-bio

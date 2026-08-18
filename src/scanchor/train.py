@@ -89,7 +89,7 @@ def train(config: dict) -> CorrectionHead:
         epoch_metrics = {
             "contrastive": 0.0, "variance_penalty": 0.0, "donor_consistency": 0.0,
             "adversarial_batch": 0.0, "batch_absorption": 0.0, "mmd": 0.0,
-            "conditional_mmd": 0.0, "total": 0.0,
+            "conditional_mmd": 0.0, "sinkhorn_ot": 0.0, "total": 0.0,
         }
         n_minibatches = 0
         for embedding, categorical_ids, continuous, cell_type, batch_code, donor_code in loader:
@@ -119,6 +119,8 @@ def train(config: dict) -> CorrectionHead:
                 mmd_weight=train_cfg.get("mmd_weight", 0.0),
                 mmd_multi_scale=train_cfg.get("mmd_multi_scale", False),
                 conditional_mmd_weight=train_cfg.get("conditional_mmd_weight", 0.0),
+                sinkhorn_weight=train_cfg.get("sinkhorn_weight", 0.0),
+                sinkhorn_epsilon=train_cfg.get("sinkhorn_epsilon", 0.1),
                 temperature=train_cfg["contrastive_temperature"],
                 min_variance_ratio=train_cfg["min_variance_ratio"],
             )
@@ -138,7 +140,8 @@ def train(config: dict) -> CorrectionHead:
               f"| donor_consistency {avg['donor_consistency']:.4f} "
               f"| adversarial_batch {avg['adversarial_batch']:.4f} "
               f"| batch_absorption {avg['batch_absorption']:.4f} | mmd {avg['mmd']:.4f} "
-              f"| conditional_mmd {avg['conditional_mmd']:.4f} | total {avg['total']:.4f}")
+              f"| conditional_mmd {avg['conditional_mmd']:.4f} | sinkhorn_ot {avg['sinkhorn_ot']:.4f} "
+              f"| total {avg['total']:.4f}")
 
     checkpoint_path = Path(train_cfg["checkpoint_out"])
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

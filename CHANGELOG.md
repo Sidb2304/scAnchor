@@ -5,6 +5,33 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.2.0] - 2026-08-18
+
+Cross-backbone validation: does scAnchor's characterized batch-vs-bio
+trade-off hold with a structurally different foundation model, or is it a
+scGPT-specific artifact? Re-embedded the identical Stephenson cells (same
+seed, same per-donor cap, same 21,000 cells already used for the
+published scGPT results) with Geneformer (V1-10M) instead, trained the
+same validated config, seed-checked across 3 seeds.
+
+Real, seed-robust result: the magnitude of scAnchor's effect is nearly
+identical across backbones -- batch-mixing regression +0.116 (Geneformer)
+vs. +0.120 (scGPT), cell-type-purity improvement +0.092 vs. +0.085, with
+Harmony's near-flat pattern also replicating. This is evidence the
+trade-off is a property of scAnchor's correction mechanism, not an
+artifact of scGPT's embedding space specifically.
+
+Getting this result required resolving several real, separate
+Geneformer/cluster-infrastructure issues unrelated to scAnchor's own
+code: a dependency chain needing a compiler-standard override and version
+pins, a CUDA-driver/toolkit mismatch, a home-directory disk quota
+repeatedly exhausted by CUDA-heavy conda environments (fixed by building
+the environment on the lab's shared storage instead), and a scheduler
+default silently requesting the wrong OS on GPU nodes (jobs sat in `qw`
+indefinitely with no error, regardless of actual GPU availability, until
+`-l operating_system=RedHat8` was set explicitly). Documented in
+`geneformer_feasibility/` for anyone reproducing this.
+
 ## [1.1.2] - 2026-08-16
 
 Real, verified finding, not just documentation: a plain `pip install

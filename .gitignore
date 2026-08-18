@@ -19,3 +19,7 @@ venv/
 /geneformer_feasibility/geneformer_repo/
 /geneformer_feasibility/tokenized/
 /geneformer_feasibility/embeddings_out/
+/geneformer_feasibility/tokenized_stephenson/
+/geneformer_feasibility/embeddings_out_stephenson/
+/geneformer_feasibility/geneformer_stephenson_run/
+/pypi_install_test/

@@ -37,7 +37,7 @@
 # is a useful bonus -- a fresh, real MMD/Levy baseline number on the actual
 # files, not just the historical README number of unverified provenance.
 #
-# Submit from the repo root: qsub submit_uger_levy_full_dataset.sh
+# Submit from the repo root: qsub scripts/submit_uger_levy_full_dataset.sh
 ###############################################################################
 
 set -euo pipefail

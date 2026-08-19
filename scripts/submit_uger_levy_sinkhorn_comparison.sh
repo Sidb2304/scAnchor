@@ -36,7 +36,7 @@
 # nvidia-cudart-cu12 etc. packages the CUDA build actually dlopens at
 # import time).
 #
-# Submit from the repo root: qsub submit_uger_levy_sinkhorn_comparison.sh
+# Submit from the repo root: qsub scripts/submit_uger_levy_sinkhorn_comparison.sh
 ###############################################################################
 
 set -euo pipefail

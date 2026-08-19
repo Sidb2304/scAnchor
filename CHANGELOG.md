@@ -5,6 +5,35 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.5.0] - 2026-08-19
+
+Tested whether combining mmd_weight and sinkhorn_weight in one
+correction head escapes the batch-vs-bio trade-off curve, motivated by
+their complementary weaknesses on Levy (MMD weak on donor
+retrieval/cell-type purity, Sinkhorn weak on batch-mixing). A
+single-seed grid initially looked like a real win -- every combined
+config beat both individual mechanisms on donor retrieval -- but a
+proper 3-seed check on the two most promising points showed this didn't
+replicate (donor retrieval has real seed variance, std up to 0.043, that
+one seed doesn't reveal). Honest result: mmd_weight=20+sinkhorn_weight=0.5
+does show a real, seed-robust batch-mixing improvement over either
+mechanism alone, but at a genuine cost to donor retrieval and cell-type
+purity -- a different point on the same trade-off curve, not an escape
+from it.
+
+Getting the 3-seed check done at all required a real performance fix:
+correction_loss loops over every batch-pair in Python, which at Levy's
+8 batches is dozens of small sequential GPU kernel launches per
+minibatch and made the single-seed sweep take ~50-55 min/seed for
+Sinkhorn-containing configs. scripts/_vectorized_batch_losses.py batches
+every pair into one op instead -- numerically verified equivalent to
+losses.py (including a gradient check), a ~16x speedup. Kept separate
+from losses.py rather than modifying those validated, tested functions
+in place. Verified its divergence from the sequential version's exact
+trained-model output (after enough SGD steps) is ordinary
+floating-point summation-order non-associativity, not a bug -- loss
+values matched to ~1e-6 at step 1, drifting to ~1e-3 by step 3.
+
 ## [1.4.0] - 2026-08-19
 
 Sinkhorn checked against two of the three validation axes MMD's default

@@ -857,6 +857,57 @@ choice; if biological-signal preservation (cell-type purity, donor
 retrieval) matters most and you can tolerate the runtime cost,
 `sinkhorn_weight=0.5` is worth trying.
 
+**Does combining `mmd_weight` and `sinkhorn_weight` in one correction head
+escape the curve? A single-seed sweep looked promising; a proper 3-seed
+check shows it doesn't.** Motivated directly by the Levy result above:
+MMD and Sinkhorn have complementary weaknesses there (MMD weak on donor
+retrieval/cell-type purity, Sinkhorn weak on batch-mixing) — real
+evidence they might be correcting different parts of the problem, worth
+testing rather than assuming. `correction_loss` already supports both
+weights simultaneously; a single-seed grid (`mmd_weight` ∈ {10, 20},
+`sinkhorn_weight` ∈ {0.25, 0.5}) initially looked like a genuine win:
+every combined config beat *both* individual mechanisms on donor
+retrieval (0.778–0.806 vs. 0.708/0.736).
+
+**That result didn't replicate.** Seed-checking the two most promising
+points across 3 seeds:
+
+| config | donor retrieval after (3 seeds) |
+|---|---|
+| mmd_weight=20 alone (published) | 0.722 ± 0.020 |
+| sinkhorn_weight=0.5 alone (published) | 0.741 ± 0.007 |
+| mmd_weight=20 + sinkhorn_weight=0.5 | 0.685 ± 0.017 (**worse than both**) |
+| mmd_weight=10 + sinkhorn_weight=0.5 | 0.755 ± 0.043 (within noise of Sinkhorn alone) |
+
+The "every combined config wins on donor retrieval" finding was single-seed
+noise, not a real synergy — donor retrieval has real seed-to-seed variance
+at this scale (std up to 0.043) that one seed doesn't reveal. Honest
+conclusion: `mmd_weight=20`+`sinkhorn_weight=0.5` does show a real,
+seed-robust batch-mixing improvement over either mechanism alone (0.236 ±
+0.003), but at a genuine cost to both donor retrieval and cell-type
+purity — a different trade-off point, not an escape from the curve.
+Combining the mechanisms lands on the same trade-off surface every other
+mechanism in this project has, just at a new point on it.
+
+Getting a real 3-seed check done at all required a genuine performance
+fix first: `correction_loss` computes `mmd_loss`/`sinkhorn_ot_loss` by
+looping over every batch-pair in Python — at Levy's 8 batches (up to
+C(8,2)=28 pairs, Sinkhorn needing 50 iterations each) that's dozens of
+small sequential GPU kernel launches per minibatch, and the single-seed
+sweep above took ~50-55 min/seed for Sinkhorn-containing configs.
+`scripts/_vectorized_batch_losses.py` batches every pair into one
+tensor op instead — numerically verified equivalent to `losses.py`'s
+functions (including a gradient check), cutting the same configs to
+~3 min/seed (a ~16x speedup). It's kept separate from `losses.py` rather
+than modifying those functions in place — they're validated and tested,
+and this avoids any risk to that history — and diverges from the
+sequential version's exact trained-model output after enough training
+steps (verified: loss values match to ~1e-6 in the first step, drifting
+to ~1e-3 by the third — ordinary floating-point summation-order
+non-associativity compounding through many SGD steps, not a bug; this is
+why the seed-check used the vectorized version's own numbers throughout
+rather than trying to reproduce the single-seed sweep's exact values).
+
 The isolated architecture experiment this was ported from (including the
 neighbor-attention idea that did *not* beat MMD, and the debugging history
 of a real Sinkhorn dual-update bug) lives in a separate, ungitted sibling

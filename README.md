@@ -47,14 +47,19 @@ trade-off, at nearly identical magnitude, reproduces with Geneformer
 embeddings instead of scGPT — real evidence this is a property of the
 correction mechanism, not a scGPT-specific artifact.
 
-One mechanism from a genuinely different class *does* escape that curve on
-the dataset tested so far: entropic-regularized optimal transport
-(`sinkhorn_weight`, see Current results) beats the shipped MMD default on
-both batch-mixing and cell-type purity simultaneously, seed-checked. It
-ships in this release but stays off by default — real, but validated on
-one dataset/split so far, not yet checked against the broader validation
-(donor retrieval, replicate structure, cross-backbone) that earned MMD its
-default status.
+One mechanism from a genuinely different class -- entropic-regularized
+optimal transport (`sinkhorn_weight`, see Current results) -- escapes that
+curve on Stephenson/scGPT and replicates on Geneformer: it beats the
+shipped MMD default on both batch-mixing and cell-type purity
+simultaneously, seed-checked on both backbones. But checked against the
+private Levy dataset's donor-retrieval/replicate-structure axis, the
+picture is genuinely mixed, not another clean win: better donor retrieval
+and much better cell-type purity, but *worse* batch-mixing than MMD there
+-- a real, different trade-off point, not a universal improvement. Ships
+in this release but stays off by default (`sinkhorn_weight: 0.0`) --
+real, validated on two of MMD's three original validation axes now
+(cross-backbone: positive; replicate-structure: mixed), with the scIB
+atlas-level benchmarks still untested.
 
 **Recommendation:** use the shipped default
 (`mmd_weight: 20`, `adversarial_weight: 0`, `absorption_weight: 0`) as a
@@ -780,18 +785,77 @@ and cell-type-purity improvement is *better* than MMD's. This is not
 another point on the same trade-off curve; it's a real Pareto improvement
 on this dataset/split.
 
-Two things temper this before treating it as a replacement for MMD's
-default status:
-- **Weight range matters.** The smooth trade-off above only holds for
-  `sinkhorn_weight` ≲2. At weight≥10, both metrics degrade *together*
-  instead of trading off cleanly (a real, observed non-monotonic
-  instability) — unlike `mmd_weight`, which traces a predictable curve
-  across its entire validated range. Stay in the swept range.
-- **Narrower validation than MMD's.** This has only been run on the
-  Stephenson/scGPT panel above. It has not yet been checked against the
-  donor-retrieval, replicate-structure, or cross-backbone axes that earned
-  `mmd_weight` its default status — see **Configuration** for why it ships
-  off by default (`sinkhorn_weight: 0.0`) despite this result.
+One caveat that already held at the time this was first validated:
+**weight range matters.** The smooth trade-off above only holds for
+`sinkhorn_weight` ≲2. At weight≥10, both metrics degrade *together*
+instead of trading off cleanly (a real, observed non-monotonic
+instability) — unlike `mmd_weight`, which traces a predictable curve
+across its entire validated range. Stay in the swept range.
+
+**Cross-backbone check: the Pareto improvement replicates on Geneformer
+too, with one honest new wrinkle.** Same identical Geneformer-embedded
+Stephenson cells as the MMD cross-backbone check above, `sinkhorn_weight=0.5`,
+seed-checked across 3 seeds:
+
+| metric | Geneformer, sinkhorn_weight=0.5 (3 seeds) | Geneformer, mmd_weight=20 (published) |
+|---|---|---|
+| batch-mixing purity: raw → after (Δ) | 0.752 → 0.761, 0.779, 0.738 (avg **+0.017**) | 0.752 → 0.876, 0.876, 0.852 (avg +0.116) |
+| cell-type kNN purity: raw → after (Δ) | 0.470 → 0.553, 0.552, 0.553 (avg **+0.083**) | 0.470 → 0.559, 0.562, 0.566 (avg +0.092) |
+
+The core finding replicates: Sinkhorn's batch-mixing regression is again
+dramatically smaller than MMD's (a ~7x difference here), with a
+comparable cell-type-purity gain. The wrinkle: batch-mixing has much
+higher seed-to-seed variance on this backbone (std 0.029, vs. 0.008 on
+scGPT at the same weight) — one seed even improves batch-mixing past the
+raw baseline entirely. label_knn stays tight across seeds (std 0.0005),
+so this variance is specific to the batch-mixing axis on Geneformer, not
+a general instability.
+
+**Replicate-structure check on the private Levy dataset: a genuinely
+mixed result, not a repeat of the win above.** This is the one MMD axis
+Sinkhorn hadn't been checked against — donor retrieval and batch-mixing
+on a real multi-donor panel with donors densely crossed with batches
+(unlike Jerber's sparse crossing above, Levy's 8 donors are fully crossed
+with all 9 batches). Same `scripts/run_full_dataset.py` pipeline as
+Levy's earlier results, full ~81k-cell panel (no subsampling), seed-checked
+across 3 seeds, `sinkhorn_weight=0.5` vs. the shipped `mmd_weight=20`
+default:
+
+| metric | mmd_weight=20 (3 seeds) | sinkhorn_weight=0.5 (3 seeds) |
+|---|---|---|
+| donor retrieval accuracy: raw → after | 0.611 → **0.722** ± 0.020 | 0.611 → **0.741** ± 0.007 |
+| batch-mixing purity: raw → after (Δ) | 0.272 → 0.289 (+0.016) | 0.272 → 0.361 (**+0.089**) |
+| cell-type kNN purity: raw → after (Δ) | 0.382 → 0.532 (+0.150) | 0.382 → **0.651 (+0.269)** |
+| wall-clock per seed (30 epochs) | ~4 min | ~50 min |
+
+Purity metrics evaluated on a fixed 20k-cell random subsample of the
+combined ~81k cells (both metrics' nearest-neighbor computation is
+brute-force at this embedding dimensionality — O(n²), and expensive
+enough at full scale to risk the cluster walltime; donor retrieval itself
+is exact/unsampled, since it only operates on (donor, batch) centroids).
+
+**Sinkhorn wins on donor retrieval and cell-type purity here — by a wide
+margin on the latter — but loses on batch-mixing**, the opposite of its
+pattern on Stephenson/Geneformer, where its batch-mixing regression was
+always *smaller* than MMD's. This is real evidence Sinkhorn's advantage
+doesn't hold uniformly across every axis: on this dataset it's a
+different, real trade-off point (much better biological-signal
+preservation, worse batch-mixing) rather than a strict improvement.
+Sinkhorn is also ~12x slower per seed here (8 batches × up to
+C(8,2)=28 pairs, each needing a 50-iteration solve, vs. MMD's single
+kernel evaluation per pair) — a real, separate practical cost at this
+batch count, independent of the accuracy trade-off.
+
+**Net assessment: Sinkhorn is a real, validated alternative mechanism
+with a genuinely different (not simply better) profile than MMD's — not
+a replacement for it.** Two of the three axes MMD was validated on are
+now checked (cross-backbone: positive; replicate-structure: mixed); the
+scIB atlas-level donor-free benchmarks remain untested. Stays off by
+default (`sinkhorn_weight: 0.0`) — see **Configuration**. If batch-mixing
+matters most for your use case, `mmd_weight=20` is still the better
+choice; if biological-signal preservation (cell-type purity, donor
+retrieval) matters most and you can tolerate the runtime cost,
+`sinkhorn_weight=0.5` is worth trying.
 
 The isolated architecture experiment this was ported from (including the
 neighbor-attention idea that did *not* beat MMD, and the debugging history

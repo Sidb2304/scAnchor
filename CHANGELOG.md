@@ -5,6 +5,52 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.4.0] - 2026-08-19
+
+Sinkhorn checked against two of the three validation axes MMD's default
+status originally rested on (cross-backbone, replicate-structure) --
+findings honestly nuance the "beats MMD on both axes" result 1.3.0
+shipped, not just confirm it further.
+
+**Cross-backbone (Geneformer): the Pareto improvement replicates.** Same
+Geneformer-embedded Stephenson cells as the earlier MMD cross-backbone
+check, `sinkhorn_weight=0.5`, seed-checked (3 seeds): batch-mixing
+regression +0.017 vs. MMD's +0.116 (~7x smaller), cell-type-purity gain
++0.083 vs. +0.092 (comparable). One new wrinkle: batch-mixing has much
+higher seed variance on this backbone (std 0.029 vs. 0.008 on scGPT) --
+one seed even improves batch-mixing past the raw baseline.
+
+**Replicate-structure (private Levy dataset): a genuinely mixed result,
+not a repeat win.** Located the real Levy astrocyte mini-village files
+(previously unlocated -- required a real filesystem investigation across
+the lab's data drive, documented for future reference) and ran the full
+~81k-cell panel (no subsampling) through a real scGPT + GPU cluster
+pipeline, seed-checked (3 seeds), sinkhorn_weight=0.5 vs. mmd_weight=20:
+Sinkhorn wins clearly on donor retrieval (0.741 vs. 0.722) and cell-type
+purity (+0.269 vs. +0.150 -- nearly double), but *loses* on batch-mixing
+(+0.089 vs. +0.016) -- the opposite of its pattern on the other two
+datasets. Also ~12x slower per seed (8 batches means up to 28 batch-pairs,
+each needing Sinkhorn's 50-iteration solve vs. MMD's single kernel call).
+
+Net: Sinkhorn is a real, validated *alternative* to MMD with a genuinely
+different profile (better biological-signal preservation, worse
+batch-mixing, much slower) -- not a strict improvement or a replacement
+for MMD's default status. Still ships off by default
+(`sinkhorn_weight: 0.0`).
+
+Also fixed a real, separate performance issue surfaced by running at
+Levy's true 81k-cell/8-batch scale (the first dataset in this project's
+history run at this scale): `correction_loss` always computes
+`mmd_loss`/`class_conditional_mmd_loss`/`sinkhorn_ot_loss` regardless of
+their weight (by design, for diagnostic visibility), which is cheap at
+Stephenson's 3-batch scale but genuinely expensive at 8 batches x 14 cell
+types (up to 392 pairwise kernel/Sinkhorn computations per minibatch for
+terms half of any given run doesn't even use). `scripts/run_levy_sinkhorn_comparison.py`
+composes the loss by hand instead of using the shared wrapper --
+100% behavior-preserving (a term at weight=0 already contributed exactly
+0 to the total), purely a wall-clock fix for this comparison script, not
+a change to `correction_loss`'s public behavior or its tests.
+
 ## [1.3.0] - 2026-08-18
 
 New batch-mixing mechanism, `sinkhorn_weight` (entropic-regularized

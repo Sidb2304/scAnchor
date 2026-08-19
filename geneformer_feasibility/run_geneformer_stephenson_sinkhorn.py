@@ -1,0 +1,158 @@
+"""Cross-backbone validation for the Sinkhorn OT mechanism (v1.3.0's new
+sinkhorn_weight): does sinkhorn_weight=0.5's real Pareto improvement over
+mmd_weight=20 (README's Current results, scGPT backbone) generalize to
+Geneformer embeddings, on the IDENTICAL cells already used for both the
+published scGPT result and the Geneformer/MMD cross-backbone result
+(v1.2.0)?
+
+Reuses run_geneformer_stephenson_benchmark.py's exact data-building logic
+(same CSV, same held-out-site selection) so the cells compared are
+identical to that already-published Geneformer/MMD result -- only the
+loss mechanism (sinkhorn_weight=0.5, mmd_weight=0.0) differs.
+
+Reuses scAnchor's own train()/evaluate modules directly (this is
+scAnchor's own repo) -- not the PyPI package, the local src/.
+"""
+from __future__ import annotations
+
+import sys
+import time
+from pathlib import Path
+
+import anndata as ad
+import numpy as np
+import pandas as pd
+
+REPO_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(REPO_DIR / "src"))
+
+from scanchor.evaluate.leave_one_batch_out import run as run_leave_one_batch_out
+from scanchor.train import train
+
+HERE = Path(__file__).parent
+EMB_CSV = HERE / "embeddings_out_stephenson" / "stephenson.csv"
+EMBED_DIM = 256
+RNG_SEED = 0
+
+# Published references, both already in README's Current results.
+PUBLISHED_MMD_SCGPT = {"batch_mixing_purity_after": 0.8501, "label_knn_purity_after": 0.7059}
+PUBLISHED_MMD_GENEFORMER_AVG = {"batch_mixing_purity_after": 0.868, "label_knn_purity_after": 0.562}
+PUBLISHED_SINKHORN_SCGPT = {"batch_mixing_purity_after": 0.7609, "label_knn_purity_after": 0.7121}
+
+
+def build_h5ad() -> ad.AnnData:
+    df = pd.read_csv(EMB_CSV)
+    embed_cols = [str(i) for i in range(EMBED_DIM)]
+    embedding = df[embed_cols].to_numpy(dtype="float32")
+
+    obs = df[["batch", "cell_type", "total_counts", "pct_counts_mt"]].copy()
+    adata = ad.AnnData(X=np.zeros((len(df), 1), dtype="float32"), obs=obs)
+    adata.obsm["X_geneformer"] = embedding
+    return adata
+
+
+def build_config(ref_path, held_out_path, out_dir, seed=RNG_SEED):
+    return {
+        "reference_panel": {
+            "paths": [str(ref_path)],
+            "embedding_key": "X_geneformer",
+            "cell_type_col": "cell_type",
+            "batch_col": "batch",
+            "categorical_covariate_cols": ["batch"],
+            "continuous_covariate_cols": ["total_counts", "pct_counts_mt"],
+        },
+        "model": {
+            "embed_dim": EMBED_DIM,
+            "cat_embed_dim": 8,
+            "covariate_dim": 32,
+            "hidden_dim": 128,
+            "max_delta_ratio": 1.0,
+            "discriminator_hidden_dim": 128,
+        },
+        "training": {
+            "seed": seed,
+            "batch_size": 512,
+            "epochs": 30,
+            "learning_rate": 1e-3,
+            "contrastive_temperature": 0.1,
+            "contrastive_weight": 1.0,
+            "variance_weight": 1.0,
+            "donor_weight": 1.0,
+            "adversarial_weight": 0.0,
+            "absorption_weight": 0.0,
+            # The mechanism under test here -- mmd_weight OFF, sinkhorn_weight
+            # at the value found in the architecture experiment (README's
+            # Current results) to beat published MMD on both axes at once on
+            # the scGPT backbone.
+            "mmd_weight": 0.0,
+            "mmd_multi_scale": False,
+            "conditional_mmd_weight": 0.0,
+            "sinkhorn_weight": 0.5,
+            "sinkhorn_epsilon": 0.1,
+            "adversarial_lambda": 1.0,
+            "grad_clip_norm": 5.0,
+            "min_variance_ratio": 0.8,
+            "checkpoint_out": str(out_dir / f"correction_head_geneformer_sinkhorn_seed{seed}.pt"),
+        },
+        "validation": {
+            "leave_one_batch_out_path": str(held_out_path),
+            "replicate_dataset_path": str(ref_path),
+        },
+    }
+
+
+def main():
+    adata = build_h5ad()
+    print(f"loaded {adata.n_obs} cells, embedding dim {adata.obsm['X_geneformer'].shape[1]}")
+
+    held_out_site = adata.obs["batch"].value_counts().idxmin()
+    print(f"held-out site (smallest, matching the scGPT + MMD/Geneformer runs): {held_out_site}")
+
+    reference = adata[adata.obs["batch"] != held_out_site].copy()
+    held_out = adata[adata.obs["batch"] == held_out_site].copy()
+    print(f"reference: {reference.n_obs} cells, held-out: {held_out.n_obs} cells")
+
+    out_dir = HERE / "geneformer_stephenson_run"
+    out_dir.mkdir(exist_ok=True)
+    ref_path = out_dir / "reference_sinkhorn.h5ad"
+    held_out_path = out_dir / "heldout_sinkhorn.h5ad"
+    reference.write_h5ad(ref_path)
+    held_out.write_h5ad(held_out_path)
+
+    seed_results = []
+    t_total = time.time()
+    for seed in (0, 1, 2):
+        config = build_config(ref_path, held_out_path, out_dir, seed=seed)
+        print(f"\n=== training scAnchor on Geneformer embeddings, seed={seed} "
+              f"(sinkhorn_weight=0.5, mmd_weight=0.0) ===")
+        t0 = time.time()
+        train(config)
+        print(f"training done  ({time.time() - t0:.0f}s elapsed)")
+
+        print(f"=== scAnchor leave-one-batch-out, seed={seed} ===")
+        scanchor_result = run_leave_one_batch_out(config, config["training"]["checkpoint_out"])
+        scanchor_result["seed"] = seed
+        print(scanchor_result)
+        seed_results.append(scanchor_result)
+    print(f"\ntotal elapsed: {time.time() - t_total:.0f}s")
+
+    bmix_vals = np.array([r["batch_mixing_purity_after"] for r in seed_results])
+    knn_vals = np.array([r["label_knn_purity_after"] for r in seed_results])
+
+    print("\n=== SUMMARY (Geneformer backbone, sinkhorn_weight=0.5, seed-checked 0/1/2) ===")
+    for r in seed_results:
+        print({"dataset": "stephenson_geneformer_sinkhorn", **r})
+    print(f"mean batch_mixing_purity_after: {bmix_vals.mean():.4f} (std {bmix_vals.std():.4f})")
+    print(f"mean label_knn_purity_after:    {knn_vals.mean():.4f} (std {knn_vals.std():.4f})")
+
+    print("\n=== for reference ===")
+    print(f"published MMD/scGPT:        batch_mixing_after={PUBLISHED_MMD_SCGPT['batch_mixing_purity_after']}, "
+          f"label_knn_after={PUBLISHED_MMD_SCGPT['label_knn_purity_after']}")
+    print(f"published MMD/Geneformer(avg 3 seeds): batch_mixing_after~{PUBLISHED_MMD_GENEFORMER_AVG['batch_mixing_purity_after']}, "
+          f"label_knn_after~{PUBLISHED_MMD_GENEFORMER_AVG['label_knn_purity_after']}")
+    print(f"sinkhorn/scGPT (already published):   batch_mixing_after={PUBLISHED_SINKHORN_SCGPT['batch_mixing_purity_after']}, "
+          f"label_knn_after={PUBLISHED_SINKHORN_SCGPT['label_knn_purity_after']}")
+
+
+if __name__ == "__main__":
+    main()

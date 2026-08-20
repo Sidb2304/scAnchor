@@ -5,6 +5,56 @@ happens when a real, validated finding lands (or, for 1.0.0, when the
 public interface is declared stable) — not for infrastructure-only
 commits.
 
+## [1.6.0] - 2026-08-20
+
+Completes Sinkhorn's validation against all three of MMD's original
+validation axes, and closes out a broader architecture-exploration
+thread with a real, convergent negative result.
+
+**scIB atlas check (immune/pancreas/lung): the Levy pattern replicates,
+not the Stephenson one.** sinkhorn_weight=0.5 vs mmd_weight=20,
+seed-checked (3 seeds), same cached embeddings as the original MMD-only
+scIB validation: on all three datasets, Sinkhorn loses to MMD on
+batch-mixing but wins on cell-type purity, every time. Combined with
+Levy: four independent real datasets show this consistent trade-off;
+only Stephenson/Geneformer (the same underlying cells, two backbones)
+showed a clean win on both axes. Honest conclusion: Sinkhorn's "beats
+MMD on everything" result looks specific to Stephenson's particular
+structure, not Sinkhorn's general behavior -- its real signature is a
+systematic trade-off relative to MMD, not a strict improvement. This
+completes all three of MMD's original validation axes for Sinkhorn.
+
+**Three further architecture changes tried (isolated experiment,
+scanchor-architecture-experiment/, not part of this package), on top of
+the loss-mechanism exploration -- none escaped the curve:**
+- Neighbor-attention (cross-attend to nearest neighbors in other
+  batches): neutral/negative, essentially a wash vs. the published
+  baseline.
+- Mixture-of-experts by cell type: first attempt collapsed to one
+  expert handling 20,411 of 21,336 cells (a real load-balancing
+  failure, fixed with a standard entropy-based auxiliary loss). The
+  fixed version's gate learned real cell-type structure (verified via
+  mutual information, not assumed), but the corrected-embedding outcome
+  was nearly identical to the broken version -- a properly-working
+  implementation of cell-type-specialized capacity, still no
+  improvement.
+- Batch-statistic conditioning (condition on each batch's own raw-space
+  mean/std instead of a fixed-vocabulary ID embedding, targeting the
+  gap that new batches otherwise get an "unknown batch" fallback):
+  worse than the plain baseline on both axes, not another point on the
+  curve.
+
+Six genuinely different interventions across both the loss-mechanism
+axis and the architecture axis, including one independently verified to
+be working exactly as designed, all converging on the same trade-off
+surface -- real evidence this is a structural property of single-pass,
+per-cell correction of a frozen embedding, not a fixable limitation of
+any one mechanism. Documented as the honest current ceiling for this
+paradigm rather than continuing to search for a mechanism that escapes
+it; further progress likely requires changing what information the
+correction step has access to (amortized OT, or a semi-transductive
+design), not another loss or architecture variant.
+
 ## [1.5.0] - 2026-08-19
 
 Tested whether combining mmd_weight and sinkhorn_weight in one

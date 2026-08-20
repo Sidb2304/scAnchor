@@ -10,26 +10,26 @@
 #$ -t 1-2
 ###############################################################################
 # Real three-way comparison on Stephenson et al. 2021's COVID-19 PBMC atlas
-# (Site=batch, Status=condition, donor_id -- but donor is fully confounded
+# (Site=batch, Status=condition, donor_id, but donor is fully confounded
 # with Site here, see run_stephenson_benchmark.py's docstring): task 1 runs
 # scAnchor (current default, mmd_weight=20) + a Harmony baseline via scGPT
 # embeddings; task 2 runs scDisInFact directly on raw counts (no scGPT
-# needed). Both read the same cached subsample -- built once by
-# submit_uger_stephenson_prep.sh -- so they compare on identical cells.
+# needed). Both read the same cached subsample, built once by
+# submit_uger_stephenson_prep.sh, so they compare on identical cells.
 #
-# Do NOT qsub this directly -- submit via scripts/submit_stephenson_pipeline.sh,
+# Do NOT qsub this directly; submit via scripts/submit_stephenson_pipeline.sh,
 # which chains this after the prep job with -hold_jid so both tasks here
 # don't race the prep job's download/subsample step.
 #
 # One-time setup beyond the existing scanchor env (submit_uger_scib.sh's
-# setup) -- scDisInFact is not on PyPI, needs a source install:
+# setup); scDisInFact is not on PyPI, needs a source install:
 #
 #   source activate /stanley/nehme_lab/Siddharth/conda_envs/scanchor
 #   cd /stanley/nehme_lab/Siddharth/Projects/scAnchor
 #   git clone https://github.com/ZhangLabGT/scDisInFact.git
 #   cd scDisInFact && pip install . && cd ..
 #
-# (this is a NEW dependency, not yet tested on this cluster -- expect it
+# (this is a NEW dependency, not yet tested on this cluster, so expect it
 # may need the same kind of version-pinning treatment already worked
 # through for pandas/pyarrow/Pillow/etc. in configs/default.yaml's history,
 # if its own dependencies hit the same old-glibc wheel-availability wall.)
@@ -64,7 +64,7 @@ do
     fi
 done
 if [[ -z "$CONDA_SH" ]]; then
-    echo "ERROR: couldn't find conda.sh -- see submit_uger_scib.sh's comments." >&2
+    echo "ERROR: couldn't find conda.sh; see submit_uger_scib.sh's comments." >&2
     exit 1
 fi
 source "$CONDA_SH"

@@ -10,7 +10,7 @@
 ###############################################################################
 # Builds the Geneformer-formatted version of the exact same Stephenson
 # subsample already used for the published scGPT-based results, for a
-# real apples-to-apples backbone comparison. No GPU needed -- just a
+# real apples-to-apples backbone comparison. No GPU needed, just a
 # backed-mode h5ad read + subsample, reuses the working `scanchor` conda
 # env (has anndata/numpy already).
 #

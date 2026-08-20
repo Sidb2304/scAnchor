@@ -1,12 +1,12 @@
 """Geneformer CPU feasibility smoke test: does the V1-10M checkpoint install
 and run on a tiny (200-cell) subset in reasonable time, on CPU only?
 
-Not a scAnchor integration yet -- just answering the concrete question this
+Not a scAnchor integration yet, just answering the concrete question this
 project always asks before committing engineering effort: does it actually
 install and run, and how fast, on real hardware, not assumed from docs.
 
 Selectively downloads only what's needed from the HF repo (it bundles every
-model variant + fine-tuned checkpoints in one place -- a naive full clone
+model variant + fine-tuned checkpoints in one place, and a naive full clone
 would be many unnecessary GB, the same class of problem that caused a real
 OOM with scDisInFact's full git history earlier in this project).
 """

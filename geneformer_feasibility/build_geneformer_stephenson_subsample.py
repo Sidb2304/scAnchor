@@ -1,18 +1,18 @@
 """Build the Geneformer-formatted version of the exact same Stephenson
 subsample already used for the published scGPT-based results (README's
-Current results), so the two backbones are compared on identical cells --
+Current results), so the two backbones are compared on identical cells,
 a real apples-to-apples test of whether scAnchor's validated technique
 generalizes beyond scGPT.
 
 Cell-selection logic below is a DELIBERATE, exact duplicate of
 scripts/run_stephenson_benchmark.py's build_subsample() (same RNG_SEED,
-same PER_DONOR_CAP, same per-donor groupby) -- not reused via import,
+same PER_DONOR_CAP, same per-donor groupby), not reused via import,
 since that function also does scGPT-specific gene-symbol remapping we
 don't want here. If those constants ever change, this file must change
 to match, or the comparison stops being apples-to-apples.
 
 Geneformer needs var["ensembl_id"] + obs["n_counts"] (confirmed directly
-from geneformer/tokenizer.py during the feasibility spike) -- notably
+from geneformer/tokenizer.py during the feasibility spike), notably
 LESS reformatting than scGPT needed, since this file's var_names are
 already Ensembl IDs before any remapping.
 """
@@ -49,7 +49,7 @@ def main():
     print(f"subsampling to {len(keep_idx)} cells across {full.obs['donor_id'].nunique()} donors ...")
     sub = full[keep_idx].to_memory()
 
-    # Same uns-bloat fix as v1.1.0's build_subsample() -- this file's
+    # Same uns-bloat fix as v1.1.0's build_subsample(): this file's
     # uns/antibody_X etc. are full-647k-cell-sized and unused here.
     sub.uns.clear()
 
@@ -59,12 +59,12 @@ def main():
 
     # var_names ARE ALREADY Ensembl IDs at this point (no remapping done
     # yet, unlike the scGPT version which overwrites them with gene
-    # symbols) -- just copy into the column name Geneformer expects.
+    # symbols); just copy into the column name Geneformer expects.
     sub.var["ensembl_id"] = sub.var_names.astype(str)
 
     # obs["total_counts"] is a real, already-validated column computed
     # from raw counts by this file's original CELLxGENE processing (used
-    # successfully as a scGPT continuous covariate already) -- reuse
+    # successfully as a scGPT continuous covariate already); reuse
     # directly as Geneformer's expected obs["n_counts"], rather than
     # recomputing from sub.X.
     sub.obs["n_counts"] = sub.obs["total_counts"].astype(float)

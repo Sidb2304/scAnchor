@@ -1,4 +1,4 @@
-"""Minimal YAML config loading — a plain dict is enough for this project's needs."""
+"""Minimal YAML config loading. A plain dict is enough for this project's needs."""
 
 from __future__ import annotations
 

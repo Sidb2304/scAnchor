@@ -3,26 +3,26 @@ head beat either mechanism alone on Levy?
 
 Motivated directly by run_levy_sinkhorn_comparison.py's real result: on
 Levy, MMD (mmd_weight=20) and Sinkhorn (sinkhorn_weight=0.5) have
-complementary weaknesses -- MMD is weak on donor retrieval/cell-type
+complementary weaknesses: MMD is weak on donor retrieval/cell-type
 purity but fine on batch-mixing; Sinkhorn is much stronger on
 purity/donor retrieval but worse on batch-mixing. That pattern is real
 evidence they might be correcting different parts of the problem, not
-just sitting at different points on the same trade-off curve -- worth
-testing directly rather than assuming.
+just sitting at different points on the same trade-off curve, which is
+worth testing directly rather than assuming.
 
 correction_loss already supports both weights simultaneously (no code
-change needed) -- but same as run_levy_sinkhorn_comparison.py, this
+change needed), but same as run_levy_sinkhorn_comparison.py, this
 composes the loss by hand rather than calling that shared wrapper, to
 skip class_conditional_mmd_loss (always 0-weighted here, expensive at
-Levy's 8-batch x 14-cell-type scale) -- 100% behavior-preserving, purely
-a wall-clock fix.
+Levy's 8-batch x 14-cell-type scale); this is 100% behavior-preserving,
+purely a wall-clock fix.
 
-Single seed (seed=0) across a small grid first -- each combined run pays
-Sinkhorn's full per-pair 50-iteration cost on top of MMD's, so this is
-at least as expensive per run as the sinkhorn-only comparison (~50 min/seed
-on GPU there). Seed-check only the best point after this first pass, same
-pattern as the original sinkhorn_weight sweep (single-seed sweep, then
-seed-check the winner).
+Single seed (seed=0) across a small grid first, since each combined run
+pays Sinkhorn's full per-pair 50-iteration cost on top of MMD's, so this
+is at least as expensive per run as the sinkhorn-only comparison (~50
+min/seed on GPU there). Seed-check only the best point after this first
+pass, same pattern as the original sinkhorn_weight sweep (single-seed
+sweep, then seed-check the winner).
 
 Reuses the already-cached real scGPT embeddings
 (levy_run/{reference,heldout}.h5ad).
@@ -60,7 +60,7 @@ HELD_OUT_PATH = LEVY_RUN / "heldout.h5ad"
 EMBED_DIM = 512
 EPOCHS = 30
 EVAL_SUBSAMPLE_N = 20_000
-EVAL_SUBSAMPLE_SEED = 0  # same fixed eval cells as run_levy_sinkhorn_comparison.py -- directly comparable
+EVAL_SUBSAMPLE_SEED = 0  # same fixed eval cells as run_levy_sinkhorn_comparison.py, for direct comparability
 
 # First-pass grid, single seed. Includes each individual mechanism's own
 # best point (mmd20 alone, sinkhorn0.5 alone) as an in-run sanity check

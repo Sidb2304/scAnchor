@@ -7,9 +7,9 @@ reference_panel:
   embedding_key: X_scGPT
   cell_type_col: cell_type
   batch_col: batch
-  # Optional. When set, enables the donor-consistency loss term -- only
-  # learnable if donors are crossed with batches (each donor appears in more
-  # than one batch); otherwise the term stays inert at 0.
+  # Optional. When set, enables the donor-consistency loss term, which is
+  # only learnable if donors are crossed with batches (each donor appears in
+  # more than one batch); otherwise the term stays inert at 0.
   donor_col: donor_id
   categorical_covariate_cols:
     - batch
@@ -22,15 +22,15 @@ model:
   embed_dim: 512          # must match the foundation model's output dim
   cat_embed_dim: 8
   covariate_dim: 32
-  # 128, not 256 -- this is the capacity the real MMD dose-response sweep
+  # 128, not 256, since this is the capacity the real MMD dose-response sweep
   # (README's Current results) was actually validated at. Bumping this
   # without re-validating would mean shipping an untested combination.
   hidden_dim: 128
   # Caps ||delta|| at this fraction of ||embedding|| per cell. Without this,
   # an adversarial objective has a degenerate way to "win": blow up
   # embedding magnitude rather than genuinely removing batch structure.
-  # Kept even though the discriminator is off by default below -- still
-  # relevant if you turn adversarial_weight back on.
+  # Kept even though the discriminator is off by default below, since it is
+  # still relevant if you turn adversarial_weight back on.
   max_delta_ratio: 1.0
   # Only matters if adversarial_weight > 0 below (MMD, the default
   # mechanism, doesn't use this at all). Kept at the capacity that reached
@@ -39,12 +39,12 @@ model:
   discriminator_hidden_dim: 128
   # Size of the split-off z_batch latent (see CorrectionHead docstring) that
   # absorbs batch-predictive variance instead of forcing it out of the main
-  # corrected embedding. Small on purpose -- it only needs to carry batch
+  # corrected embedding. Small on purpose: it only needs to carry batch
   # signal, not biological signal, and is discarded after training.
   batch_latent_dim: 32
 
 training:
-  # Set to get reproducible runs -- comparing two configs without this
+  # Set to get reproducible runs, since comparing two configs without this
   # confounds the comparison with a different random init/shuffle each run
   # (this bit us for real: a lower adversarial_weight looked like it made
   # donor retrieval worse, which turned out to be unseeded run-to-run noise).
@@ -60,22 +60,22 @@ training:
   # batch-mixing mechanism, kept in the code and off by default. A real,
   # seed-checked sweep (README's Current results) found it consistently
   # regresses batch-mixing purity below the pre-correction baseline, and
-  # that combining it with the MMD loss below doesn't beat MMD alone --
+  # that combining it with the MMD loss below doesn't beat MMD alone;
   # it just re-traces the same trade-off curve at a worse point. Set > 0
   # only if you're deliberately reproducing/comparing against that result.
   # adversarial_lambda ramps 0 -> this value over training (Ganin & Lempitsky
-  # schedule) rather than applying full strength from epoch 0 -- a fixed
-  # lambda=1.0 from the start caused runaway divergence on real data
+  # schedule) rather than applying full strength from epoch 0, because a
+  # fixed lambda=1.0 from the start caused runaway divergence on real data
   # (adversarial loss 2.07 -> 30,224 over 30 epochs, everything collapsed).
   adversarial_weight: 0.0
   adversarial_lambda: 1.0
-  # Weight on the BatchAbsorber term (split-latent architecture) -- also
+  # Weight on the BatchAbsorber term (split-latent architecture); also
   # off by default. Two real attempts at this (README's Current results)
   # never beat the simple single-embedding architecture on batch-mixing,
   # the one thing it was built to fix. Kept for comparison, not recommended.
   absorption_weight: 0.0
   # Maximum Mean Discrepancy between batches' corrected-embedding
-  # distributions -- the DEFAULT batch-mixing mechanism as of this config.
+  # distributions; the DEFAULT batch-mixing mechanism as of this config.
   # Non-adversarial (no min-max dynamics, no learnable parameters),
   # motivated by Harmony's success on this exact regression via the same
   # kind of distributional-alignment mechanism, and validated with a real,
@@ -83,14 +83,14 @@ training:
   # joint sweet spot (donor retrieval and batch-mixing both robustly beat
   # baseline; cell-type purity roughly neutral), 100 is the ceiling for
   # batch-mixing improvement specifically (better than Harmony, but at a
-  # real cost to cell-type purity) -- raise toward 100 if batch-mixing is
+  # real cost to cell-type purity): raise toward 100 if batch-mixing is
   # what you care about most, keep at 20 for the more balanced trade-off.
   mmd_weight: 20.0
   # Sums the RBF kernel at several bandwidth multiples of the median
-  # heuristic instead of using one bandwidth -- a standard MMD variant,
+  # heuristic instead of using one bandwidth, a standard MMD variant
   # meant to make the loss less sensitive to picking exactly the right
   # bandwidth for a given minibatch. Not yet validated against the numbers
-  # above (which used the single-bandwidth default, False) -- off until it
+  # above (which used the single-bandwidth default, False); off until it
   # has its own real sweep.
   mmd_multi_scale: false
   # MMD restricted to same-cell-type comparisons only, meant to fix the
@@ -98,23 +98,23 @@ training:
   # MMD has. Real sweep (README's Current results) found it doesn't work,
   # even after fixing a real bandwidth bug in the first version: worse
   # donor retrieval alone, and worse cell-type purity when stacked on
-  # mmd_weight above -- the opposite of the goal. Off by default, kept for
+  # mmd_weight above, the opposite of the goal. Off by default, kept for
   # comparison, not recommended.
   conditional_mmd_weight: 0.0
   # Entropic-regularized OT (Sinkhorn) between batches' corrected-embedding
-  # distributions -- an explicit matching-based alternative to mmd_weight's
+  # distributions, an explicit matching-based alternative to mmd_weight's
   # moment-matching, only ever used as a training-time loss (never baked
   # into the forward pass, which is what keeps this fully inductive despite
   # OT's usual reliance on the target batch's cells). Off by default: a
   # real, seed-checked (3 seeds) result on this exact reference panel found
   # sinkhorn_weight=0.5 beats mmd_weight=20's published numbers on BOTH
   # axes at once (batch-mixing regression +0.030 vs +0.120, cell-type-purity
-  # improvement +0.091 vs +0.085) -- not just a different point on the same
+  # improvement +0.091 vs +0.085): not just a different point on the same
   # trade-off curve. Kept off by default anyway because that result hasn't
   # yet been checked on the donor-retrieval / replicate-structure /
-  # cross-backbone axes mmd_weight's "Current results" have -- promising,
+  # cross-backbone axes mmd_weight's "Current results" have; promising,
   # real, but narrower-scope validation so far. If you enable this, disable
-  # mmd_weight (set it to 0) rather than stacking both -- the combination
+  # mmd_weight (set it to 0) rather than stacking both, since the combination
   # hasn't been tested and would confound which mechanism produced the
   # result.
   sinkhorn_weight: 0.0

@@ -53,7 +53,7 @@ def extract_embeddings(
 
     Embeddings land in ``adata.obsm["X_scGPT"]``. Requires the optional
     ``scgpt`` dependency (``pip install -e ".[scgpt]"``). Expects raw (or at
-    least unscaled) counts in ``adata.X`` — scGPT applies its own binning
+    least unscaled) counts in ``adata.X``: scGPT applies its own binning
     internally, so pre-normalizing/scaling defeats that.
 
     Set ``use_fast_transformer=False`` when ``flash-attn`` isn't installed

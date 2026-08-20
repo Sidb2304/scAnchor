@@ -4,20 +4,20 @@ axis flagged as untested in README's Net assessment for sinkhorn_weight
 (cross-backbone: checked, positive; replicate-structure/Levy: checked,
 mixed; scIB: this script).
 
-These datasets have real batch counts (immune=10, pancreas=9, lung=16 --
-all higher than Stephenson's 3, lung higher even than Levy's 8) --
+These datasets have real batch counts (immune=10, pancreas=9, lung=16,
+all higher than Stephenson's 3, lung higher even than Levy's 8); this
 uses scripts/_vectorized_batch_losses.py from the start rather than
 losses.py's sequential per-pair loop, given how much that mattered at
 Levy's smaller 8-batch scale.
 
 No donor_id in any of these (scIB atlas tasks don't have donor
-identity, same as run_scib_benchmark.py's original setup) -- only
-batch_mixing_purity / label_knn_purity via leave-one-batch-out, no
-donor_retrieval_accuracy.
+identity, same as run_scib_benchmark.py's original setup), so only
+batch_mixing_purity / label_knn_purity via leave-one-batch-out apply,
+not donor_retrieval_accuracy.
 
 Reuses the already-cached real scGPT embeddings
 (scib_benchmark_run/{dataset}/{reference,heldout}.h5ad) from the
-original MMD scIB validation -- no new embedding extraction needed.
+original MMD scIB validation; no new embedding extraction needed.
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def run_one(config, seed, reference, held_out, vocab, device):
             contrastive = supervised_contrastive_loss(corrected, cell_type, temperature=0.1)
             variance_penalty = variance_floor_penalty(embedding, corrected, cell_type, min_ratio=0.8)
             loss = contrastive + variance_penalty
-            # no donor_id in scIB tasks -- donor_consistency_loss stays inert
+            # no donor_id in scIB tasks, so donor_consistency_loss stays inert
             # (matches run_scib_benchmark.py's original setup), so it's just
             # skipped here rather than computed-and-discarded.
             if config["mmd_weight"] > 0:

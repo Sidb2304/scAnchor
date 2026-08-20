@@ -1,17 +1,17 @@
-"""Gradient-reversal batch discriminator -- the "push apart from batch
+"""Gradient-reversal batch discriminator: the "push apart from batch
 structure" term the correction objective was missing.
 
 Without this, correction_loss only had "pull together" terms (contrastive on
 cell type, donor consistency): nothing directly penalized the corrected
 embedding for still encoding batch identity. Empirically, that's exactly what
-happened -- batch-mixing purity on a held-out batch got WORSE after
+happened: batch-mixing purity on a held-out batch got WORSE after
 correction on real data, across two different scGPT checkpoints.
 
 Standard domain-adversarial (DANN) setup: a small classifier tries to predict
 batch identity from the corrected embedding; a gradient-reversal layer flips
 the sign of the gradient that flows back through it, so a single backward()
 pass trains the discriminator normally (it gets better at predicting batch)
-while pushing the correction head in the OPPOSITE direction -- to make batch
+while pushing the correction head in the OPPOSITE direction, to make batch
 identity harder to predict.
 """
 
@@ -56,7 +56,7 @@ def dann_lambda_schedule(progress: float, max_lambda: float = 1.0, gamma: float 
 class BatchDiscriminator(nn.Module):
     """Predicts batch identity from a corrected embedding, through a GRL.
 
-    Training-time only -- discard after training. Evaluation (replicate
+    Training-time only. Discard after training. Evaluation (replicate
     test, leave-one-batch-out) only needs the CorrectionHead; the
     discriminator's job is done once it's shaped the correction head's
     gradients during training.
@@ -71,7 +71,7 @@ class BatchDiscriminator(nn.Module):
     times, by almost the same margin regardless of scale. A discriminator
     that's too weak to detect batch structure a kNN metric picks up can
     reach equilibrium without ever forcing the correction head to remove
-    that structure -- it can only push back against what it can see.
+    that structure, since it can only push back against what it can see.
     """
 
     def __init__(self, embed_dim: int, n_batches: int, hidden_dim: int = 256):
@@ -89,13 +89,13 @@ class BatchDiscriminator(nn.Module):
 
 
 class BatchAbsorber(nn.Module):
-    """Predicts batch identity from `z_batch` -- trained normally, no GRL.
+    """Predicts batch identity from `z_batch`, trained normally, no GRL.
 
     The complementary half of the split-latent fix for the batch-mixing
     regression documented across every dataset/scale/discriminator-capacity
     tried on the single shared embedding. Instead of fighting batch
     structure out of the one representation everything downstream depends
-    on, `z_batch` is explicitly encouraged to *be* batch-predictive -- giving
+    on, `z_batch` is explicitly encouraged to *be* batch-predictive, giving
     batch-specific variance somewhere to go, so BatchDiscriminator's
     adversarial job on the corrected embedding is smaller and less likely to
     conflict with the contrastive/donor-consistency objectives.

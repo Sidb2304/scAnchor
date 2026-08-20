@@ -14,7 +14,7 @@
 # run_stephenson_benchmark.py (scAnchor+Harmony) and
 # run_scdisinfact_stephenson.py (scDisInFact).
 #
-# Run via scripts/submit_stephenson_pipeline.sh (NOT qsub'd directly) --
+# Run via scripts/submit_stephenson_pipeline.sh (NOT qsub'd directly);
 # that wrapper chains this job before the two comparison jobs via
 # -hold_jid, so they don't race to build the same cache file independently.
 ###############################################################################
@@ -45,7 +45,7 @@ do
     fi
 done
 if [[ -z "$CONDA_SH" ]]; then
-    echo "ERROR: couldn't find conda.sh -- see submit_uger_scib.sh's comments." >&2
+    echo "ERROR: couldn't find conda.sh; see submit_uger_scib.sh's comments." >&2
     exit 1
 fi
 source "$CONDA_SH"

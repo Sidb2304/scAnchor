@@ -1,13 +1,13 @@
 #!/bin/bash
 ###############################################################################
-# Run this directly on the cluster login node (NOT via qsub -- this is a
+# Run this directly on the cluster login node (NOT via qsub, since this is a
 # plain orchestration script, not a UGE job itself). It submits the
 # Stephenson benchmark as two chained UGE jobs so the shared 7GB
 # download/subsample step runs exactly once instead of racing across the
 # two comparison tasks:
 #
-#   1. submit_uger_stephenson_prep.sh -- downloads + subsamples once
-#   2. submit_uger_stephenson.sh (array, 2 tasks) -- scAnchor+Harmony and
+#   1. submit_uger_stephenson_prep.sh: downloads + subsamples once
+#   2. submit_uger_stephenson.sh (array, 2 tasks): scAnchor+Harmony and
 #      scDisInFact, both held until (1) finishes via -hold_jid
 #
 # Usage:

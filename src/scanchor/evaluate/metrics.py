@@ -67,7 +67,7 @@ def batch_mixing_purity(embeddings: np.ndarray, batch_ids: np.ndarray, k: int = 
 def label_knn_purity(embeddings: np.ndarray, labels: np.ndarray, k: int = 30) -> float:
     """Average fraction of a cell's k nearest neighbors sharing its label.
 
-    Higher is better — this is the bio-conservation side of the tradeoff.
+    Higher is better; this is the bio-conservation side of the tradeoff.
     """
     nn = NearestNeighbors(n_neighbors=k + 1).fit(embeddings)
     _, indices = nn.kneighbors(embeddings)

@@ -5,7 +5,7 @@ the published scGPT-based Stephenson results (README's Current results:
 batch_mixing_purity 0.7306->0.8501, label_knn_purity 0.6213->0.7059)?
 
 Reuses scAnchor's own train()/evaluate modules directly (this is scAnchor's
-own repo, unlike the abandoned sciplex side-experiment) -- not the PyPI
+own repo, unlike the abandoned sciplex side-experiment); not the PyPI
 package, the local src/ during this investigation.
 """
 from __future__ import annotations

@@ -8,7 +8,7 @@
 ###############################################################################
 # Cross-backbone validation: train scAnchor's already-validated config on
 # the Geneformer embeddings just extracted, evaluate, and compare directly
-# against the published scGPT-backbone numbers. No GPU needed -- just the
+# against the published scGPT-backbone numbers. No GPU needed, just the
 # lightweight correction-head training and Harmony, both CPU-cheap. Uses
 # the working `scanchor` conda env directly (this is scAnchor's own repo).
 #

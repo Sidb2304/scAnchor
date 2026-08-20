@@ -1,17 +1,17 @@
 """Run scAnchor + a Harmony baseline on Stephenson et al. 2021's COVID-19 PBMC
-atlas (Nat Med, doi 10.1038/s41591-021-01329-2) -- a real public dataset with
+atlas (Nat Med, doi 10.1038/s41591-021-01329-2), a real public dataset with
 a genuinely independent Site (batch) x Status (disease/condition) x donor_id
 structure, verified directly from the file (not the paper's description):
   - Site: Cambridge/Ncl/Newcastle/Sanger, 3 processing sites
   - Status: Covid/Healthy/LPS/Non_covid, 4 categories
-  - donor_id: 120 donors -- but every donor appears at exactly ONE site, so
+  - donor_id: 120 donors, but every donor appears at exactly ONE site, so
     donor and batch are fully confounded here. This dataset is NOT suitable
     for scAnchor's donor-consistency mechanism (no learnable cross-batch
-    donor signal exists) -- donor_col is deliberately omitted, same
+    donor signal exists), so donor_col is deliberately omitted, same
     treatment as the scIB benchmark tasks. It IS suitable for the
     batch-mixing / cell-type-purity comparison this script runs.
 
-Full dataset is 647,366 cells / ~7GB -- far too large for CPU scGPT
+Full dataset is 647,366 cells / ~7GB, far too large for CPU scGPT
 embedding extraction (~91hr at this project's observed throughput). This
 script subsamples by donor (capped per-donor) to a tractable scale, shared
 with scripts/run_scdisinfact_stephenson.py so both methods are compared
@@ -57,7 +57,7 @@ def download_if_needed(dest: Path) -> None:
 
 
 def build_subsample(full_path: Path, subsample_path: Path) -> ad.AnnData:
-    """Shared subsampling logic -- reused verbatim (same seed) by
+    """Shared subsampling logic, reused verbatim (same seed) by
     run_scdisinfact_stephenson.py so both methods see identical cells.
     Cached after first build so re-runs (e.g. the scDisInFact script running
     as a separate array task) don't redo this.
@@ -82,7 +82,7 @@ def build_subsample(full_path: Path, subsample_path: Path) -> ad.AnnData:
     print(f"subsampling to {len(keep_idx)} cells across {full.obs['donor_id'].nunique()} donors ...")
     sub = full[keep_idx].to_memory()
 
-    # AnnData doesn't subset .uns (it's unstructured, arbitrary content) --
+    # AnnData doesn't subset .uns (it's unstructured, arbitrary content);
     # this file's uns/antibody_X, uns/antibody_raw.X, and
     # uns/neighbors/rp_forest are all still full-647k-cell-sized structures
     # (confirmed via direct h5py inspection: e.g. antibody_X's indptr has
@@ -92,11 +92,11 @@ def build_subsample(full_path: Path, subsample_path: Path) -> ad.AnnData:
     sub.uns.clear()
 
     # raw counts live in .raw.X per this file's CELLxGENE schema (X itself is
-    # normalized/processed) -- confirmed from this dataset's own metadata
+    # normalized/processed), confirmed from this dataset's own metadata
     # (raw_data_location: raw.X), not assumed.
     sub.X = sub.raw[:, sub.var_names].X.copy()
     # var_names are Ensembl IDs (e.g. ENSG00000243485) per this file's
-    # CELLxGENE schema, NOT gene symbols -- confirmed directly (a first
+    # CELLxGENE schema, NOT gene symbols; confirmed directly (a first
     # real run against scGPT's vocab matched 0/24245 genes using var_names
     # as-is). Real gene symbols live in the separate feature_name column.
     sub.var["gene_name"] = sub.var["feature_name"].astype(str)
@@ -129,7 +129,7 @@ def build_config(ref_path: Path, held_out_path: Path, out_dir: Path, embed_dim: 
             # "Status" (Covid/Healthy/LPS/Non_covid) added alongside batch
             # after a real, seed-checked (0/1/2) ablation found it partially
             # closes the batch-mixing regression documented in README's
-            # Current results (v0.9.1) -- consistent direction at every
+            # Current results (v0.9.1), with consistent direction at every
             # seed, no cost to cell-type purity. Doesn't fully close the
             # gap, but a genuine, free win via the same mechanism already
             # used for batch.

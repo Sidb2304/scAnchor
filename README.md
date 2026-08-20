@@ -6,8 +6,8 @@ Inductive batch correction for frozen single-cell foundation model embeddings.
 
 Single-cell foundation models (scGPT, Geneformer) are meant to be embedded once
 and reused across studies. In practice, their embeddings still carry
-batch/technical structure, and the standard fix — Harmony, scVI, scDisInFact,
-and similar tools — is *transductive*: correction requires having every batch
+batch/technical structure, and the standard fix (Harmony, scVI, scDisInFact,
+and similar tools) is *transductive*: correction requires having every batch
 present at correction time. Every time a new dataset arrives, you're back to
 joint re-correction across the whole collection. That defeats the "embed once,
 reuse forever" promise foundation models are supposed to deliver, and batch
@@ -37,18 +37,18 @@ assembled itself and public ones (scIB atlases, Stephenson et al. 2021).
 The batch-mixing-vs-cell-type-purity trade-off documented throughout this
 README is a structural property of the problem this project has
 consistently found, not a bug still waiting to be fixed: every
-*moment-matching* mechanism tried — adversarial discriminator, split-latent
-architecture, global MMD, class-conditional MMD, multi-scale MMD — lands
+*moment-matching* mechanism tried (adversarial discriminator, split-latent
+architecture, global MMD, class-conditional MMD, multi-scale MMD) lands
 somewhere on that same curve, never off of it. This project's contribution
 is characterizing that curve honestly with real, seed-checked evidence and
 shipping a validated default, not claiming to have eliminated the
 trade-off. Also validated cross-backbone (see Current results): the same
 trade-off, at nearly identical magnitude, reproduces with Geneformer
-embeddings instead of scGPT — real evidence this is a property of the
-correction mechanism, not a scGPT-specific artifact.
+embeddings instead of scGPT, real evidence this is a property of the
+correction mechanism and not a scGPT-specific artifact.
 
-One mechanism from a genuinely different class -- entropic-regularized
-optimal transport (`sinkhorn_weight`, see Current results) -- looked like
+One mechanism from a genuinely different class, entropic-regularized
+optimal transport (`sinkhorn_weight`, see Current results), looked like
 it escaped that curve on Stephenson/scGPT and replicated on Geneformer
 (beating the shipped MMD default on both batch-mixing and cell-type
 purity simultaneously, seed-checked on both backbones). Checked against
@@ -58,24 +58,24 @@ scIB atlases), the picture is consistently different, not another clean
 win: better cell-type purity (and, on Levy, donor retrieval), but *worse*
 batch-mixing than MMD, every time, on all four independent datasets.
 **The honest conclusion is that Stephenson/Geneformer's clean win looks
-specific to that dataset's structure, not Sinkhorn's general behavior** --
+specific to that dataset's structure, not Sinkhorn's general behavior:**
 its real, generalizable signature is a systematic trade-off relative to
 MMD, not an escape from the curve. Ships in this release but stays off
-by default (`sinkhorn_weight: 0.0`) -- now validated on all three of
+by default (`sinkhorn_weight: 0.0`), now validated on all three of
 MMD's original validation axes (cross-backbone: positive;
 replicate-structure and scIB: both show the consistent trade-off).
 
 Combining `mmd_weight` and `sinkhorn_weight` in one correction head, and
 three further architecture changes (neighbor-attention, mixture-of-experts
-by cell type, batch-statistic conditioning -- see Current results) were
-all tried as more direct attempts to escape the curve. None did --
+by cell type, batch-statistic conditioning, see Current results), were
+all tried as more direct attempts to escape the curve. None did,
 including a mixture-of-experts implementation independently verified to
 be doing exactly what it was designed to do (real cell-type-correlated
 routing, not a collapsed/broken one). Six genuinely different
 interventions across both the loss-mechanism axis and the architecture
 axis converging on the same trade-off surface is real evidence this is a
 structural property of single-pass, per-cell correction of a frozen
-embedding -- not a fixable limitation of any one mechanism tried so far.
+embedding, not a fixable limitation of any one mechanism tried so far.
 Escaping it further would likely require changing what information the
 correction step has access to (e.g. an amortized optimal-transport
 mechanism, or a semi-transductive design), not another loss or
@@ -83,25 +83,25 @@ architecture variant within the current paradigm.
 
 **Recommendation:** use the shipped default
 (`mmd_weight: 20`, `adversarial_weight: 0`, `absorption_weight: 0`) as a
-balanced middle ground — donor retrieval and batch-mixing both robustly
-beat the pre-correction baseline, cell-type purity roughly neutral. If
-batch-mixing is what matters most for your use case, raise to
-`mmd_weight: 100` (a real, validated ceiling — beats Harmony on this
+balanced middle ground: donor retrieval and batch-mixing both robustly
+beat the pre-correction baseline, and cell-type purity stays roughly
+neutral. If batch-mixing is what matters most for your use case, raise to
+`mmd_weight: 100` (a real, validated ceiling that beats Harmony on this
 metric, at a real, larger cost to cell-type purity). Don't turn the
 adversarial discriminator or split-latent architecture back on
-(`adversarial_weight`/`absorption_weight` > 0) — both are kept in the
+(`adversarial_weight`/`absorption_weight` > 0): both are kept in the
 codebase for comparison, and a real, seed-checked sweep found the
 discriminator consistently regresses batch-mixing purity, with
 split-latent never beating the simple single-embedding architecture on
 the one thing it was built to fix. See **Current results** for the full
 evidence behind this recommendation, including where it doesn't hold
-(the Stephenson comparison, where all three methods tested — scAnchor,
-Harmony, scDisInFact — fail differently and none wins cleanly).
+(the Stephenson comparison, where all three methods tested, scAnchor,
+Harmony, and scDisInFact, fail differently and none wins cleanly).
 
 ## Current results
 
 Tested on a real, genetically-demultiplexed multi-donor iPSC-derived
-astrocyte dataset (schizophrenia cohort, "mini-village" pooling design — 8
+astrocyte dataset (schizophrenia cohort, "mini-village" pooling design: 8
 donors fully crossed with 9 technical batches, so donor identity and batch
 are not confounded). Not a public benchmark release; reproducing this exactly
 requires access to the source data.
@@ -109,13 +109,13 @@ requires access to the source data.
 **Backbone matters more than expected.** scGPT's `whole-human`/`brain`
 checkpoint vs. its `continual pretrained` checkpoint (built by the scGPT
 authors specifically for zero-shot embedding tasks, which is exactly what
-this project does) gives a clear, consistent gap at matched data volume — the
+this project does) gives a clear, consistent gap at matched data volume: the
 continual-pretrained checkpoint encodes donor identity more strongly from the
 start and every downstream metric improves accordingly. **Use
 `continual pretrained`, not `brain` or `whole-human`, as the default
 backbone.**
 
-**Data volume is the strongest lever found — but only for donor-signal
+**Data volume is the strongest lever found, but only for donor-signal
 metrics, not batch-mixing.** Two data points, same checkpoint, same code,
 same held-out batch:
 
@@ -126,7 +126,7 @@ same held-out batch:
 | batch-mixing purity (lower is better) | 0.220 → 0.431 (worse) | 0.247 → 0.444 (worse) |
 
 More data drove a *much* bigger gain in donor retrieval (+0.06 → +0.28) and
-cell-type purity as scale went up 5.4x. Batch-mixing didn't move at all —
+cell-type purity as scale went up 5.4x. Batch-mixing didn't move at all:
 the after-correction regression is the same size at both scales (+0.21,
 +0.20). That rules out "just needs more data" as the fix for batch-mixing:
 this is a discriminator-capacity or architecture problem, not a data-scale
@@ -134,7 +134,7 @@ one, and running the full ~81k-cell dataset would almost certainly just
 reconfirm this same gap at higher compute cost rather than close it.
 
 The adversarial batch-discriminator term (see `model/batch_discriminator.py`)
-converges correctly — its own loss settles near `log(n_batches)`, meaning the
+converges correctly: its own loss settles near `log(n_batches)`, meaning the
 discriminator is reduced to chance-level guessing, the intended adversarial
 equilibrium. But that doesn't translate into better batch-mixing by a
 kNN-based metric: a shallow discriminator reaching equilibrium only
@@ -143,13 +143,13 @@ neighborhood structure a kNN metric picks up.
 
 **Discriminator capacity is a real, reproducible trade-off, not a free fix.**
 The correction head's `delta_net` has 2 hidden layers at 128 units; the
-discriminator originally had 1 layer at 64 units — a plausible capacity
+discriminator originally had 1 layer at 64 units, a plausible capacity
 mismatch letting it reach equilibrium too easily. First test of this (a
 single unseeded run each) looked like a clean win with a real cost. That
 turned out to be *partly* noise: `train()` had no seed control, so every
 config comparison was confounded by a different random init and shuffle
-order each run — confirmed when lowering `adversarial_weight` (which should
-have *eased* pressure) instead made donor retrieval *worse*, a result
+order each run. This was confirmed when lowering `adversarial_weight` (which
+should have *eased* pressure) instead made donor retrieval *worse*, a result
 impossible to interpret without controlling for that. Added
 `training.seed`, then re-ran discriminator capacity {64, 128, 256 units} x 3
 seeds each on the 18.2k-cell data (all other settings held fixed):
@@ -163,16 +163,16 @@ seeds each on the 18.2k-cell data (all other settings held fixed):
 (baseline before correction, all rows: donor retrieval 0.594, batch-mixing
 0.247, cell-type purity 0.375)
 
-This is now a real, controlled result, not noise — every metric's direction
+This is now a real, controlled result, not noise: every metric's direction
 is consistent across all 3 seeds within each row. Two findings:
 
 1. **256 units clearly and consistently helps batch-mixing** (average
-   regression +0.04 vs. +0.44-0.24 → +0.04, i.e. down to near-neutral) —
+   regression +0.04 vs. +0.44-0.24 → +0.04, i.e. down to near-neutral),
    but at a real, consistent cost to donor retrieval and cell-type purity.
    This is a genuine trade-off, not a bug: **use `discriminator_hidden_dim:
    256` (the current default) if batch-mixing matters most; drop to `64` if
    donor-signal preservation matters most.**
-2. **128 units is not a stable middle ground — don't reach for it.** One of
+2. **128 units is not a stable middle ground, so don't reach for it.** One of
    three seeds collapsed donor retrieval to 0.06, and its batch-mixing
    average (0.47) is worse than *both* the 64-unit and 256-unit configs.
    There's no smooth dial between these two regimes at this dataset scale;
@@ -188,15 +188,15 @@ divergence (loss climbing into the tens of thousands, every metric
 collapsing) until (1) the adversarial strength was ramped in via the
 Ganin & Lempitsky (2015) schedule instead of applied at full strength
 immediately, and (2) the residual correction's magnitude was explicitly
-bounded — without that, the correction head could "win" the adversarial game
+bounded: without that, the correction head could "win" the adversarial game
 by inflating embedding scale rather than genuinely removing batch structure,
 and the variance-floor loss doesn't catch runaway growth, only collapse.
 
 **Public-dataset validation (Jerber et al. 2021) did not replicate the
-donor-retrieval gains seen on the private dataset above — and it's not a
+donor-retrieval gains seen on the private dataset above, and it's not a
 dilution artifact.** Jerber et al.'s day-11 timepoint (public, see Reference
 panel below) is a real, harder test: 253,381 cells, 177 donors, 12
-differentiation pools — but only 25 donors are crossed across >=1 pool
+differentiation pools, but only 25 donors are crossed across >=1 pool
 globally, and holding out one pool (`pool7`, 4,452 cells, used whole) for
 the leave-one-batch-out test leaves only **19 of 162 donors** genuinely
 crossed within the training data itself. Day-11 cells are also ~96% just two
@@ -208,18 +208,18 @@ Levy's mature astrocytes.
 | Full training subsample (7,001 cells, 162 donors, mostly uncrossed) | 0.0 → 0.0 |
 | Filtered to only the 19 genuinely-crossed donors (1,489 cells, no dilution) | 0.0 → 0.0 |
 
-Restricting to a clean, well-crossed subset — removing any dilution from the
-152 single-pool donors that can't contribute to the donor-consistency loss —
+Restricting to a clean, well-crossed subset (removing any dilution from the
+152 single-pool donors that can't contribute to the donor-consistency loss)
 made no difference at all. That rules out "the signal is just diluted" as
 the explanation. The `donor_consistency` loss term itself stayed flat around
 5.3-5.5 for all 30 epochs in both runs, the same signature seen elsewhere in
-this project when a loss term isn't finding any useful gradient — not a
-sign of dilution, a sign of no exploitable signal. Batch-mixing still
+this project when a loss term isn't finding any useful gradient: not a
+sign of dilution, but a sign of no exploitable signal. Batch-mixing still
 regressed after correction here too, consistent with every other experiment
 in this project regardless of dataset.
 
 **Day-11 interpretation at the time**: the most likely explanation seemed
-biological — day-11 iPSC-derived midbrain progenitors are very early and
+biological: day-11 iPSC-derived midbrain progenitors are very early and
 transcriptionally homogeneous, where donor/genotype signal may simply be
 weaker relative to shared early-developmental programs than in Levy's more
 mature, differentiated astrocytes. Jerber's day-30 timepoint (later, more
@@ -230,7 +230,7 @@ hypothesis.
 structural, not biological, and it's the same at every Jerber timepoint.**
 Ran the current validated default (`mmd_weight=20`, not the adversarial-only
 config day-11 used before MMD existed) on Jerber's day-30 timepoint
-(250,923 cells, 175 donors, 12 pools — downloaded fresh from the same
+(250,923 cells, 175 donors, 12 pools, downloaded fresh from the same
 Zenodo record, day30.h5.zip, ~3.1GB compressed / 11.3GB uncompressed):
 
 | | donor retrieval, before → after |
@@ -238,22 +238,22 @@ Zenodo record, day30.h5.zip, ~3.1GB compressed / 11.3GB uncompressed):
 | Day-11 (162 training donors) | 0.0 → 0.0 |
 | Day-30 (159 training donors) | 0.0 → 0.038 |
 
-Day-30 donor retrieval is still, for practical purposes, zero — nowhere
+Day-30 donor retrieval is still, for practical purposes, zero, nowhere
 close to Levy's 0.594 → 0.906. That alone would be consistent with either
 explanation (homogeneity or structure). What settles it: **day-30's donor
-crossing is 25 crossed donors out of 175 total** — essentially identical to
-day-11's 25 crossed out of 177 — despite day-30 being a genuinely more
+crossing is 25 crossed donors out of 175 total**, essentially identical to
+day-11's 25 crossed out of 177, despite day-30 being a genuinely more
 differentiated, more diverse cell population (pre-correction cell-type kNN
 purity 0.821 at day-30, vs. day-11's ~96%-two-progenitor-states
 near-monoculture). If homogeneity were the explanation, day-30's much more
 distinct cell states should have given the donor-consistency term more to
 work with. It didn't, and the reason is visible in the numbers: **the same
-~25 donors are crossed across pools at both timepoints** — this is the same
+~25 donors are crossed across pools at both timepoints**: this is the same
 donor cohort profiled twice, with the same pooling design, so the sparse
 crossing is a fixed property of Jerber's whole experimental design, not
 something that changes with differentiation stage. Batch-mixing and
 cell-type purity both still improved with correction here (0.392 → 0.356
-and 0.821 → 0.842 respectively) — the MMD mechanism itself generalizes
+and 0.821 → 0.842 respectively); the MMD mechanism itself generalizes
 fine to a second, very different real dataset; it's specifically the
 donor-consistency objective that has no exploitable signal on Jerber,
 regardless of timepoint.
@@ -261,7 +261,7 @@ regardless of timepoint.
 **Day-52 is now low priority, not the natural next test it looked like
 before this result.** It almost certainly has the same donor/pool cohort
 structure as day-11 and day-30 (same study, same donors, same pooling
-design) — running it would very likely just reconfirm sparse crossing a
+design); running it would very likely just reconfirm sparse crossing a
 third time at real cost (day52.h5.zip is ~7.1GB compressed, noticeably
 bigger than day-11/day-30's ~3.1GB each). Not worth it unless something
 else about day-52 specifically suggests otherwise.
@@ -271,7 +271,7 @@ baseline.** Given the batch-mixing regression above is architectural, not a
 tuning problem, `CorrectionHead` was redesigned to split its output into two
 latents from a shared trunk: `z_bio` (contrastive + donor-consistency,
 still the only thing used downstream) and a new `z_batch` explicitly trained
-(no gradient reversal, just a normal classifier — `BatchAbsorber`) to
+(no gradient reversal, just a normal classifier, `BatchAbsorber`) to
 *absorb* batch-predictive variance instead of forcing it out of one shared
 representation. First version, on the Levy 18.2k-cell data (seed 0, 256-unit
 discriminator, same as the row above for a clean comparison):
@@ -283,10 +283,10 @@ discriminator, same as the row above for a clean comparison):
 | v2: separate trunks, no shared layer | 0.39 | 0.41 | 0.42 |
 
 `batch_absorption` converged to near-zero within 1-2 epochs in both
-versions — the absorber genuinely works, `z_batch` really does become
+versions: the absorber genuinely works, `z_batch` really does become
 batch-predictive. v1's shared trunk let that fast-converging signal shape a
 representation `z_bio`'s pathway also drew from, despite separate output
-heads — diagnosed and confirmed by v2 (fully separate trunks, no shared
+heads. This was diagnosed and confirmed by v2 (fully separate trunks, no shared
 hidden layer), which recovered from the collapse but still didn't beat the
 original, simpler single-embedding architecture on batch-mixing, the one
 thing this redesign was built to fix. Kept v2's separate-trunks fix (a real,
@@ -296,8 +296,8 @@ its added complexity yet.
 **Baseline calibration: Harmony proves the metric is achievable, just not by
 this method's current mechanism.** `evaluate/baselines.py` existed since
 early in this project but was never actually run until now. On the same
-18.2k-cell combined reference+held-out set (transductive — Harmony gets
-every batch, the fair comparison per that module's own docstring):
+18.2k-cell combined reference+held-out set (transductive, meaning Harmony
+gets every batch, the fair comparison per that module's own docstring):
 
 | method | batch-mixing purity (lower=better) | cell-type kNN purity |
 |---|---|---|
@@ -305,17 +305,17 @@ every batch, the fair comparison per that module's own docstring):
 | **Harmony** | **0.188** (real improvement) | 0.320 (worse) |
 | scAnchor (256-unit discriminator) | 0.280 (worse) | 0.380 (better) |
 
-Harmony genuinely improves batch-mixing here (0.247 → 0.188) — this rules
+Harmony genuinely improves batch-mixing here (0.247 → 0.188): this rules
 out "the metric is just unsatisfiable on this data," which every prior
 scAnchor result on this dataset was consistent with but didn't prove either
 way. Harmony pays for its win with worse cell-type purity, a real trade-off
-in the *opposite* direction from scAnchor's — the two methods fail
+in the *opposite* direction from scAnchor's. The two methods fail
 differently, not identically, which matters: it means scAnchor's specific
 mechanism (an adversarial classifier trying to make batch identity
 unpredictable) is the more likely culprit, not some property of the
 dataset that makes batch-mixing improvement generally incompatible with
 preserving biological signal. Harmony's actual mechanism is distributional
-alignment via iterative clustering, not an adversarial classifier at all —
+alignment via iterative clustering, not an adversarial classifier at all,
 real motivation to try a distribution-matching (MMD) loss next instead of
 another adversarial-classifier variant. Also fixed a real bug getting this
 number: `harmony_correct`'s unconditional `.T` assumed an orientation that
@@ -323,10 +323,10 @@ doesn't hold for the installed harmonypy version, causing a silent shape
 mismatch that would have crashed downstream.
 
 **MMD loss: the first mechanism in this project that actually beats the
-pre-correction baseline on batch-mixing — with a real, clean dose-response
+pre-correction baseline on batch-mixing, with a real, clean dose-response
 curve.** Implemented `mmd_loss()` (RBF-kernel Maximum Mean Discrepancy,
 median-heuristic bandwidth, pairwise across every batch present in a
-minibatch — see `model/losses.py`) as a direct alternative to the
+minibatch; see `model/losses.py`) as a direct alternative to the
 adversarial discriminator, motivated exactly by the Harmony result above:
 distributional alignment, not an adversarial classifier. Swept `mmd_weight`
 on the same 18.2k-cell data, seed 0, with the adversarial and absorption
@@ -348,7 +348,7 @@ isolate MMD's effect on its own:
 (baseline before correction, every row: donor retrieval 0.594, batch-mixing
 0.247, cell-type purity 0.375)
 
-This is a genuinely clean, monotonic dose-response relationship — batch-
+This is a genuinely clean, monotonic dose-response relationship: batch-
 mixing keeps improving as `mmd_weight` increases across the entire swept
 range with no noise or reversal, unlike the discriminator-capacity sweep
 above. Three real findings:
@@ -357,36 +357,36 @@ above. Three real findings:
    pre-correction baseline on batch-mixing, not just shrink the regression.**
    Every prior attempt here (adversarial discriminator at any capacity,
    both split-latent versions) made batch-mixing *worse* than doing nothing.
-   MMD crosses below baseline at `mmd_weight=20` and keeps improving —
-   at `mmd_weight=100` it's better than Harmony (0.177 vs. 0.188), the
+   MMD crosses below baseline at `mmd_weight=20` and keeps improving; at
+   `mmd_weight=100` it's better than Harmony (0.177 vs. 0.188), the
    external baseline that motivated trying this mechanism in the first
    place.
-2. **`mmd_weight≈20` is close to a joint sweet spot, not a cherry-pick — with
+2. **`mmd_weight≈20` is close to a joint sweet spot, not a cherry-pick, with
    one caveat confirmed by the seed check below.** At that setting, donor
    retrieval and batch-mixing both robustly beat their pre-correction
    baseline (donor 0.594→0.906-0.922, batch-mixing 0.247→0.21-0.225 across 3
    seeds). Cell-type purity is the exception: it beats baseline at seed 0
-   (0.375→0.383) but sits just *below* it at seed 1 (0.373) — a difference
+   (0.375→0.383) but sits just *below* it at seed 1 (0.373), a difference
    small enough to call a wash, not a robust three-way win. Still no prior
    discriminator/split-latent config got this close on all three at once.
 3. **The trade-off doesn't disappear, it just moves.** Past `mmd_weight≈20`,
    cell-type purity keeps dropping and crosses back below its own baseline
-   by `mmd_weight=50` — the best batch-mixing numbers (50, 100) come at a
+   by `mmd_weight=50`; the best batch-mixing numbers (50, 100) come at a
    real cost to within-cell-type structure, the same donor-vs-batch tension
    seen everywhere else in this project, just shifted to a better operating
    point on the curve than the adversarial mechanism ever reached.
-4. **Batch-mixing genuinely plateaus by `mmd_weight=100` — this isn't an
+4. **Batch-mixing genuinely plateaus by `mmd_weight=100`: this isn't an
    unbounded knob.** Pushing to 200 and 500 moved batch-mixing purity by
    \<0.001 (0.1769 → 0.1765) while donor retrieval stayed exactly flat at
    0.922 and cell-type purity kept drifting down only slowly (0.273 → 0.267
    → 0.264, a shrinking rate of decline, not a cliff). `mmd_weight≈100-200`
-   is the practical ceiling for this mechanism on this data — there's no
+   is the practical ceiling for this mechanism on this data; there's no
    free additional batch-mixing improvement to be had by cranking the
    weight further, only a slow, flattening cost to cell-type purity.
 
 **Seed-robustness check: the dose-response curve holds, unlike the
 discriminator-capacity sweep in v0.1.** The entire sweep above was run at
-seed 0 only — the same situation that, for the discriminator-capacity sweep
+seed 0 only, the same situation that, for the discriminator-capacity sweep
 earlier in this project, turned out to hide a real seed-dependent collapse
 (one of three 128-unit seeds cratered donor retrieval to 0.06). Re-ran
 `mmd_weight` in `{0, 20, 100}` at seeds 1 and 2 to check:
@@ -403,17 +403,17 @@ earlier in this project, turned out to hide a real seed-dependent collapse
 | 100 | 1 | 0.969 | 0.175 | 0.272 |
 | 100 | 2 | 0.953 | 0.173 | 0.271 |
 
-No collapse, no reversal, no non-monotonic surprise at any seed — every
+No collapse, no reversal, no non-monotonic surprise at any seed; every
 metric stays within a tight band per weight (batch-mixing purity in
 particular varies by <0.015 across seeds at every weight tested). The
 mmd_weight=100-beats-Harmony result is real: all three seeds land at
 0.173-0.177, comfortably under Harmony's 0.188. The one caveat is the item
-2 correction above — cell-type purity at `mmd_weight=20` straddles its own
+2 correction above: cell-type purity at `mmd_weight=20` straddles its own
 baseline (above at seeds 0/2, marginally below at seed 1) rather than
 robustly beating it, so call that setting "donor+batch-mixing both win,
 cell-type roughly neutral" rather than "all three win."
 
-**Combining MMD with the adversarial term doesn't beat MMD alone — it moves
+**Combining MMD with the adversarial term doesn't beat MMD alone: it moves
 along the same trade-off curve, not off of it.** Took `mmd_weight=20` (the
 best joint operating point above) and added back a weakened adversarial
 term:
@@ -427,24 +427,24 @@ term:
 
 Adding any adversarial weight buys a small batch-mixing improvement (0.225
 → 0.209-0.219) but costs enough cell-type purity to drop it back *below*
-its own pre-correction baseline (0.375) — exactly the property that made
+its own pre-correction baseline (0.375), exactly the property that made
 `mmd_weight=20` alone special. The two mechanisms aren't complementary here;
 adding the adversarial term back just re-traces the same donor/batch-mixing-
 vs-cell-type curve MMD alone already traces by itself at a slightly higher
 weight, rather than reaching a better point off that curve. **MMD alone,
 not combined with the adversarial discriminator, is the better mechanism
-found in this project so far** — pick a point on its curve (weight≈20 for
+found in this project so far**: pick a point on its curve (weight≈20 for
 all-three-beat-baseline, weight≈100 for best achievable batch-mixing) rather
 than adding the discriminator back on top of it.
 
-Not yet tested at this point: MMD on the full 81k-cell Levy dataset — see
+Not yet tested at this point: MMD on the full 81k-cell Levy dataset; see
 Next steps. (MMD on Jerber is tested below, in the day-30 discussion.)
 
-**Class-conditional MMD — a real, well-motivated hypothesis that real data
+**Class-conditional MMD: a real, well-motivated hypothesis that real data
 refutes, even after fixing a real bug in it.** Global MMD can't tell "batch
 structure" apart from "these batches just happen to have different
 cell-type composition," so at high weight it may pull cell types together
-as readily as it removes real batch structure — a plausible explanation
+as readily as it removes real batch structure, a plausible explanation
 for the cell-type-purity cost documented above.
 `class_conditional_mmd_loss()` (see `model/losses.py`) tests the fix
 directly: compute MMD only between same-cell-type cells across batches,
@@ -452,7 +452,7 @@ never mixing cell types into the same kernel comparison, so it can only
 touch batch structure, not composition.
 
 The first version of this (v0.3.0) recomputed the RBF kernel's bandwidth
-separately on each small per-cell-type subset — a real bug, not just a
+separately on each small per-cell-type subset, a real bug, not just a
 suboptimal choice: small subsets give a noisy, inconsistent length scale
 from one cell type to the next and one minibatch to the next. Fixed (v0.4.0)
 by computing one shared bandwidth from the whole minibatch (same scale the
@@ -476,27 +476,27 @@ global term itself uses) and reusing it for every cell type. Re-swept
 Comparing to the pre-fix numbers (same weights, same seed, git history has
 the exact table): donor retrieval at `mmd_weight=20`+`conditional_mmd_weight=20`
 recovered from a genuine collapse (0.766 → 0.844, closer to but still below
-plain MMD's 0.906) — real evidence the noisy-bandwidth diagnosis was
+plain MMD's 0.906), real evidence the noisy-bandwidth diagnosis was
 correct. But the core conclusion is unchanged:
 1. Conditional MMD alone is still dramatically worse at donor retrieval
    than global MMD at every matched weight (0.58-0.80 vs. global's
    0.91-0.92), and still doesn't achieve global MMD's clean batch-mixing
-   improvement (0.20-0.31 vs. global's 0.18-0.23) — not a viable drop-in
+   improvement (0.20-0.31 vs. global's 0.18-0.23), not a viable drop-in
    replacement, fixed or not.
 2. Stacking it on the current default still doesn't recover cell-type
-   purity as intended — `conditional_mmd_weight=20`/`50` still make it
+   purity as intended: `conditional_mmd_weight=20`/`50` still make it
    *worse* than `mmd_weight=20` alone (0.28-0.30 vs. 0.383), the opposite of
    the goal, just less severely than before the fix. Only
    `conditional_mmd_weight=5` looks like a genuine small win on all three
-   metrics — essentially unchanged by the fix (0.953/0.230/0.386 vs. the
-   pre-fix 0.953/0.234/0.388) — but the effect size is still small enough to
+   metrics, essentially unchanged by the fix (0.953/0.230/0.386 vs. the
+   pre-fix 0.953/0.234/0.388), but the effect size is still small enough to
    be within MMD-alone's own seed-to-seed noise band, not something to trust
    without a seed check.
 
 **Not adopted, still.** `configs/default.yaml` stays at `mmd_weight=20,
-conditional_mmd_weight=0` — global MMD alone remains the better mechanism
-found in this project, and the fix — while real and worth keeping in the
-code — doesn't change that. `class_conditional_mmd_loss` and
+conditional_mmd_weight=0`: global MMD alone remains the better mechanism
+found in this project, and the fix, while real and worth keeping in the
+code, doesn't change that. `class_conditional_mmd_loss` and
 `conditional_mmd_weight` stay in the codebase as a documented "tried,
 fixed a real bug in it, still didn't win" path, same treatment as the
 adversarial discriminator and split-latent architecture.
@@ -506,7 +506,7 @@ adversarial discriminator and split-latent architecture.
 Standard MMD variants (e.g. Long et al.'s Deep Adaptation Networks) instead
 sum the kernel at several bandwidth multiples, meant to make the loss less
 sensitive to picking exactly the right scale for a given minibatch. Added as
-an opt-in flag (`mmd_multi_scale`, default off — `mmd_loss`'s existing
+an opt-in flag (`mmd_multi_scale`, default off: `mmd_loss`'s existing
 behavior and already-validated numbers are unchanged unless explicitly
 requested) and swept at the same three weights already established for the
 single-bandwidth version, seed 0, real 18.2k-cell data:
@@ -514,16 +514,16 @@ single-bandwidth version, seed 0, real 18.2k-cell data:
 | `mmd_weight` | kernel | donor retrieval after | batch-mixing after | cell-type purity after |
 |---|---|---|---|---|
 | 20 | single-scale (default) | 0.906 | 0.225 | 0.383 |
-| 20 | multi-scale | 0.938 | 0.249 (worse — barely beats baseline) | 0.459 |
+| 20 | multi-scale | 0.938 | 0.249 (worse, barely beats baseline) | 0.459 |
 | 50 | single-scale | 0.891 | 0.181 | 0.299 |
 | 50 | multi-scale | 0.891 | 0.193 (worse) | 0.328 |
 | 100 | single-scale | 0.922 | 0.177 | 0.273 |
 | 100 | multi-scale | 0.875 (worse) | **0.169 (new best, beats Harmony's 0.188)** | 0.278 |
 
-**No clean win — it's a different point on the trade-off surface, not a
+**No clean win: it's a different point on the trade-off surface, not a
 dominant one.** At `mmd_weight=20` and `50`, multi-scale trades away some
 batch-mixing improvement for meaningfully better cell-type purity (0.459 vs.
-0.383 at weight 20) — at weight 20 specifically, batch-mixing barely beats
+0.383 at weight 20); at weight 20 specifically, batch-mixing barely beats
 doing nothing at all (0.249 vs. 0.247 baseline), which defeats the point of
 using MMD there. At `mmd_weight=100`, the trade reverses: multi-scale sets
 a new best batch-mixing number for this project (0.169) but costs real
@@ -531,7 +531,7 @@ donor retrieval (0.875 vs. 0.922). No weight tested gives a strict
 improvement on all three metrics over its single-scale counterpart.
 
 **Not adopted as the default**, for the same reason as everything else in
-this section — no unambiguous win, just a different shape of trade-off.
+this section: no unambiguous win, just a different shape of trade-off.
 `configs/default.yaml` stays at `mmd_multi_scale: false`. Kept in the
 codebase as a real, working option: set `mmd_multi_scale: true` with
 `mmd_weight=100` specifically if squeezing out the best possible
@@ -539,10 +539,10 @@ batch-mixing number matters more than donor retrieval for a given use case.
 
 **scVI baseline: a genuine mechanism-level trade-off, not a win or a loss.**
 Once the `mudata`/`anndata` import conflict was resolved (upgrading
-`scvi-tools` to latest — see git history — rather than pinning older
+`scvi-tools` to latest, see git history, rather than pinning older
 versions, which turned out to be self-contradictory in its own declared
 metadata), scVI ran on the same 18,238-cell combined set, transductively,
-directly on raw counts (`n_latent=32`, 30 epochs — a different kind of
+directly on raw counts (`n_latent=32`, 30 epochs, a different kind of
 baseline than Harmony/scAnchor, since it's a full generative model of
 expression rather than a post-hoc embedding correction):
 
@@ -555,11 +555,11 @@ expression rather than a post-hoc embedding correction):
 | scAnchor (`mmd_weight=100`, adversarial off) | **0.177** | 0.273 |
 | **scVI** | 0.313 (worse than *no correction at all*) | **0.875** |
 
-scVI's cell-type purity is dramatically higher than every other method here
-— consistent with it learning directly from raw count structure, which
+scVI's cell-type purity is dramatically higher than every other method here,
+consistent with it learning directly from raw count structure, which
 encodes cell identity much more directly than a post-hoc correction of a
 foundation-model embedding can. But its batch-mixing purity is the worst of
-all four rows, including doing nothing — a real, reproducible result, not a
+all four rows, including doing nothing, a real, reproducible result, not a
 bug: training directly on raw counts with `batch_key` set doesn't
 automatically make cell neighborhoods less batch-structured by this kNN
 metric on this dataset. Another data point for the same conclusion Harmony
@@ -567,11 +567,11 @@ already supported: the failure mode here is mechanism/metric-specific, not
 a property of the dataset that makes batch-mixing improvement generally
 incompatible with preserving biological signal.
 
-**Validated on the standard scIB atlas-level benchmarks, seed-checked — a
+**Validated on the standard scIB atlas-level benchmarks, seed-checked: a
 robust win on cell-type purity, a genuinely seed-sensitive result on
 batch-mixing.** Every result above used datasets this project assembled
 itself (Levy, Jerber). The scIB atlas-level integration benchmarks
-(immune, pancreas, lung — the standard reference point every
+(immune, pancreas, lung, the standard reference point every
 batch-correction method in the field gets compared against) were flagged
 as "not yet run" since this project's start. Ran the shipped default
 config (`mmd_weight=20`) plus a Harmony baseline on all three at 3 seeds
@@ -595,12 +595,12 @@ for the full pipeline):
 lung ~0.647/0.886, immune ~0.712/0.875 batch-mixing/cell-type)
 
 **Cell-type purity: robust, 9/9.** scAnchor beats Harmony on cell-type
-purity at every seed on every dataset, with tight margins throughout —
+purity at every seed on every dataset, with tight margins throughout;
 this part of the result is not a single-seed accident.
 
 **Batch-mixing: real, and more seed-sensitive than the single-seed result
 suggested.** Three different patterns, not one:
-- **Pancreas**: Harmony wins consistently across all 3 seeds — a clean,
+- **Pancreas**: Harmony wins consistently across all 3 seeds, a clean,
   replicated result in Harmony's favor.
 - **Lung**: genuinely too close to call. Harmony is narrowly ahead at
   seeds 0 and 2 (~0.638-0.639 vs. scAnchor's 0.643), but at seed 1
@@ -608,39 +608,39 @@ suggested.** Three different patterns, not one:
   dominates here.
 - **Immune**: 2 of 3 seeds reproduce the original story (scAnchor stays
   flat near baseline while Harmony regresses below it), but **seed 2
-  shows scAnchor also regressing**, landing at 0.731 — essentially
+  shows scAnchor also regressing**, landing at 0.731, essentially
   matching Harmony's regression (0.730). A real instability in one of
   three seeds, not smoothed over: this specific dataset/mechanism
   combination isn't reliably better than doing nothing on batch-mixing.
 
 Honest bottom line: the cell-type-purity advantage is the part of this
 result worth trusting broadly. The batch-mixing comparison against Harmony
-is real but not a clean win — it's dataset-dependent, and for immune
+is real but not a clean win: it's dataset-dependent, and for immune
 specifically, seed-dependent too. Reporting both rather than only the
 favorable single seed.
 
-**Stephenson et al. 2021 COVID PBMC atlas — a genuinely independent public
+**Stephenson et al. 2021 COVID PBMC atlas: a genuinely independent public
 dataset, and the first real three-way comparison including scDisInFact.**
 Every result above used either datasets this project assembled itself
 (Levy, Jerber) or the scIB atlas tasks. A real comparison against
 scDisInFact (see Next steps for why it was the only one of the three
 counts-based methods worth attempting) needed a public dataset with an
-independent condition variable — none of Levy/Jerber/scIB have one.
+independent condition variable; none of Levy/Jerber/scIB have one.
 Verified directly from the file (not the paper's description) that
 Stephenson et al. 2021 (*Nat Med*, COVID-19 PBMC atlas) has `Site` (3
 processing sites, used as batch), `Status` (Covid/Healthy/LPS/Non_covid,
-used as scDisInFact's condition variable), and `donor_id` — but every donor
+used as scDisInFact's condition variable), and `donor_id`, but every donor
 appears at exactly one site, so donor and batch are fully confounded here;
 not suitable for scAnchor's donor-consistency mechanism (`donor_col`
 deliberately omitted, same treatment as the scIB tasks), only for the
 batch-mixing/cell-type-purity comparison run here.
 
 Subsampled by donor (175 cells/donor cap, seed 0) to 21,000 cells across
-120 donors — identical cells for every method compared. Held out the
+120 donors, identical cells for every method compared. Held out the
 smallest site (Sanger) for scAnchor's zero-shot leave-one-batch-out test;
 Harmony gets transductive access to the full combined set (its own
 established fair-comparison protocol, per above); scDisInFact trains on
-all sites/conditions jointly — it has no zero-shot/held-out protocol in
+all sites/conditions jointly; it has no zero-shot/held-out protocol in
 this codebase, so its number is in-sample, an easier task than scAnchor's,
 not a matched comparison, flagged rather than glossed over:
 
@@ -652,12 +652,12 @@ not a matched comparison, flagged rather than glossed over:
 | **scDisInFact** (in-sample, condition-disentangled cVAE) | **0.6620** (better) | 0.4755 (worse) |
 
 (scAnchor's row reflects the current default, `categorical_covariate_cols:
-["batch", "Status"]` — see the covariate-ablation finding below. The
+["batch", "Status"]`; see the covariate-ablation finding below. The
 original `batch`-only number this project first reported was 0.8501/0.7059;
 both regress relative to no correction, this is a partial improvement, not
 a different conclusion.)
 
-**No method wins cleanly — each fails differently:**
+**No method wins cleanly: each fails differently:**
 - scAnchor's batch-mixing regression is real and larger here than on the
   scIB atlases, but its cell-type-purity gain (+0.084) is the largest of
   any method tested on this dataset, achieved zero-shot on cells never
@@ -665,8 +665,8 @@ a different conclusion.)
 - Harmony essentially did nothing useful here: batch-mixing barely moved
   (in the wrong direction) and cell-type purity got worse, despite having
   full transductive access to every batch, including the held-out one.
-- scDisInFact is the only method that genuinely improved batch-mixing —
-  the whole point of its condition/batch disentangling — but paid for it
+- scDisInFact is the only method that genuinely improved batch-mixing
+  (the whole point of its condition/batch disentangling), but paid for it
   with by far the worst cell-type purity of the four rows, on an easier
   (in-sample) evaluation than scAnchor's.
 
@@ -681,11 +681,11 @@ driven by `scripts/submit_uger_stephenson.sh`.
 **Why Stephenson's regression is the worst seen in this project: the
 held-out site isn't just a different batch, it's a different disease
 population.** Same PBMC-type data as the scIB immune atlas above, but a
-much bigger batch-mixing regression here — worth understanding rather than
+much bigger batch-mixing regression here, worth understanding rather than
 shrugging off as dataset noise. Checked directly from the cached
 subsample's metadata (no retraining needed): the "hold out the smallest
 batch" heuristic used throughout this project picked Sanger (1,925 cells,
-11 donors) as the held-out site, and Sanger is **100% Covid patients** —
+11 donors) as the held-out site, and Sanger is **100% Covid patients**,
 zero Healthy, LPS, or Non_covid cells. The two training sites both have a
 real status mixture (Cambridge: 76.6% Covid/23.4% Healthy; Ncl: 62.9%
 Covid/19.4% Healthy/9.7% LPS/8.1% Non_covid). `Status` also isn't fed to
@@ -693,8 +693,8 @@ the model as a covariate at all (only `batch` is), so the correction head
 has no way to tell "genuine Covid-driven biology" apart from
 "Sanger-specific technical effect" for these cells. This is the same
 failure mode already documented in the class-conditional MMD section
-above — global MMD can't separate batch structure from composition
-differences — just with a clinical variable driving the composition shift
+above (global MMD can't separate batch structure from composition
+differences), just with a clinical variable driving the composition shift
 here instead of cell type. It's also a case where the blanket
 "hold out the smallest batch" heuristic used everywhere in this project
 picked the single most compositionally extreme site available, rather
@@ -712,16 +712,16 @@ embeddings (no re-run of the expensive scGPT step needed), at seeds 0/1/2:
 | `batch` only (original default) | 0.8515, 0.8660, 0.8483 | 0.8553 | 0.7061, 0.7026, 0.7072 | 0.7053 |
 | **`batch` + `Status`** (current default) | 0.8471, 0.8495, 0.7851 | **0.8272** | 0.7050, 0.7063, 0.7062 | 0.7058 |
 
-Consistent direction at every seed — never reverses. The regression over
+Consistent direction at every seed; it never reverses. The regression over
 the no-correction baseline (0.7306) shrinks from +0.125 to +0.097 on
 average, about a 23% reduction, with cell-type purity essentially
-unchanged (0.7053 → 0.7058, a wash). This doesn't fully close the gap —
-still meaningfully worse than doing nothing at all — but it's a real,
+unchanged (0.7053 → 0.7058, a wash). This doesn't fully close the gap
+(still meaningfully worse than doing nothing at all), but it's a real,
 free improvement using a mechanism already in the codebase, not a new
 model or loss term. **General takeaway, not just a Stephenson-specific
 fix: when a known condition/clinical covariate exists that isn't already
 captured by `batch` but plausibly correlates with which cells land in
-which batch, add it to `categorical_covariate_cols` — it costs nothing to
+which batch, add it to `categorical_covariate_cols`: it costs nothing to
 try, and this seed-checked test found only upside, never a downside.**
 `scripts/run_stephenson_benchmark.py` now ships `batch`+`Status` as its
 default; the main comparison table above reports that number as
@@ -756,7 +756,7 @@ space.
 
 One separate, honest observation that doesn't affect the above: Geneformer's
 *raw*, pre-correction cell-type purity is substantially lower than scGPT's
-on this dataset (0.470 vs. 0.621) — a real backbone-quality difference on
+on this dataset (0.470 vs. 0.621), a real backbone-quality difference on
 this specific dataset, distinct from the "does the correction behavior
 generalize" question this experiment was designed to answer.
 
@@ -765,14 +765,14 @@ specific packaging and cluster-infrastructure issues (dependency chain
 needing a compiler-standard override and several version pins, a
 CUDA-driver/toolkit mismatch, a home-directory disk quota exhausted by
 CUDA-heavy conda environments, and a scheduler default that silently
-requested the wrong OS on GPU nodes) — none of which reflect on scAnchor's
+requested the wrong OS on GPU nodes), none of which reflect on scAnchor's
 own code, but are documented in `geneformer_feasibility/` for anyone
 reproducing this.
 
 **Sinkhorn OT: an explicit matching-based mechanism that beats MMD on both
-axes at once, on this dataset — real, seed-checked, but narrower-scope
+axes at once, on this dataset: real, seed-checked, but narrower-scope
 than MMD's validation.** Every batch-mixing mechanism above (adversarial
-discriminator, every MMD variant) is a *moment-matching* loss — it only
+discriminator, every MMD variant) is a *moment-matching* loss: it only
 requires two batches' embedding distributions to share the same kernel
 statistics, which is why they all land on the same trade-off curve
 regardless of which specific loss is used. Entropic-regularized optimal
@@ -780,8 +780,8 @@ transport (`sinkhorn_ot_loss` in `losses.py`) is a mechanism from a
 genuinely different class: it explicitly solves for an (entropy-smoothed)
 minimum-cost matching between every cell in one batch and every cell in
 another, rather than matching aggregate statistics. Like MMD, it's used
-only as a training-time loss — the transport plan itself is never part of
-the forward pass — so the correction head stays fully inductive.
+only as a training-time loss (the transport plan itself is never part of
+the forward pass), so the correction head stays fully inductive.
 
 Swept `sinkhorn_weight` from 0.1 to 20 on the same Stephenson/scGPT
 reference panel and split as the published MMD numbers, seed-checked (3
@@ -796,10 +796,10 @@ seeds) at the weights that looked promising:
 | 2.0 | 0.731 → 0.768 (+0.038) | 0.621 → 0.683 (+0.061) |
 | mmd_weight=20 (published) | 0.731 → 0.850 (+0.120) | 0.621 → 0.706 (+0.085) |
 
-At `sinkhorn_weight=0.5` — the minimum of a smooth, well-behaved batch-
-mixing curve across the swept range, seed-checked with tight variance
-(std ≤0.008 on batch-mixing, ≤0.002 on cell-type purity across seeds
-0,1,2) — both metrics beat the published `mmd_weight=20` result
+At `sinkhorn_weight=0.5` (the minimum of a smooth, well-behaved batch-
+mixing curve across the swept range, seed-checked with tight variance,
+std ≤0.008 on batch-mixing, ≤0.002 on cell-type purity across seeds
+0,1,2), both metrics beat the published `mmd_weight=20` result
 simultaneously: batch-mixing regression is less than a quarter of MMD's,
 and cell-type-purity improvement is *better* than MMD's. This is not
 another point on the same trade-off curve; it's a real Pareto improvement
@@ -809,7 +809,7 @@ One caveat that already held at the time this was first validated:
 **weight range matters.** The smooth trade-off above only holds for
 `sinkhorn_weight` ≲2. At weight≥10, both metrics degrade *together*
 instead of trading off cleanly (a real, observed non-monotonic
-instability) — unlike `mmd_weight`, which traces a predictable curve
+instability), unlike `mmd_weight`, which traces a predictable curve
 across its entire validated range. Stay in the swept range.
 
 **Cross-backbone check: the Pareto improvement replicates on Geneformer
@@ -826,14 +826,14 @@ The core finding replicates: Sinkhorn's batch-mixing regression is again
 dramatically smaller than MMD's (a ~7x difference here), with a
 comparable cell-type-purity gain. The wrinkle: batch-mixing has much
 higher seed-to-seed variance on this backbone (std 0.029, vs. 0.008 on
-scGPT at the same weight) — one seed even improves batch-mixing past the
+scGPT at the same weight); one seed even improves batch-mixing past the
 raw baseline entirely. label_knn stays tight across seeds (std 0.0005),
 so this variance is specific to the batch-mixing axis on Geneformer, not
 a general instability.
 
 **Replicate-structure check on the private Levy dataset: a genuinely
 mixed result, not a repeat of the win above.** This is the one MMD axis
-Sinkhorn hadn't been checked against — donor retrieval and batch-mixing
+Sinkhorn hadn't been checked against: donor retrieval and batch-mixing
 on a real multi-donor panel with donors densely crossed with batches
 (unlike Jerber's sparse crossing above, Levy's 8 donors are fully crossed
 with all 9 batches). Same `scripts/run_full_dataset.py` pipeline as
@@ -850,12 +850,12 @@ default:
 
 Purity metrics evaluated on a fixed 20k-cell random subsample of the
 combined ~81k cells (both metrics' nearest-neighbor computation is
-brute-force at this embedding dimensionality — O(n²), and expensive
+brute-force at this embedding dimensionality (O(n²)), and expensive
 enough at full scale to risk the cluster walltime; donor retrieval itself
 is exact/unsampled, since it only operates on (donor, batch) centroids).
 
-**Sinkhorn wins on donor retrieval and cell-type purity here — by a wide
-margin on the latter — but loses on batch-mixing**, the opposite of its
+**Sinkhorn wins on donor retrieval and cell-type purity here (by a wide
+margin on the latter), but loses on batch-mixing**, the opposite of its
 pattern on Stephenson/Geneformer, where its batch-mixing regression was
 always *smaller* than MMD's. This is real evidence Sinkhorn's advantage
 doesn't hold uniformly across every axis: on this dataset it's a
@@ -863,10 +863,10 @@ different, real trade-off point (much better biological-signal
 preservation, worse batch-mixing) rather than a strict improvement.
 Sinkhorn is also ~12x slower per seed here (8 batches × up to
 C(8,2)=28 pairs, each needing a 50-iteration solve, vs. MMD's single
-kernel evaluation per pair) — a real, separate practical cost at this
+kernel evaluation per pair), a real, separate practical cost at this
 batch count, independent of the accuracy trade-off.
 
-**scIB atlas check: the Levy pattern replicates, not the Stephenson one —
+**scIB atlas check: the Levy pattern replicates, not the Stephenson one;
 completing Sinkhorn's validation against every axis MMD's default status
 rests on.** Same immune/pancreas/lung scIB tasks as the MMD-only table
 above, same cached embeddings, `sinkhorn_weight=0.5` vs. `mmd_weight=20`,
@@ -882,7 +882,7 @@ seed-checked (3 seeds):
 | lung | sinkhorn0.5 | 0.719 (**+0.071**) | 0.947 (+0.061) |
 
 **On all three scIB datasets, Sinkhorn loses to MMD on batch-mixing but
-wins on cell-type purity — every time, consistently.** This matches
+wins on cell-type purity, every time, consistently.** This matches
 Levy's pattern exactly, not Stephenson/Geneformer's. Putting every
 validated dataset together: Stephenson + Geneformer (the same underlying
 cells, two backbones) show Sinkhorn beating MMD on both axes; Levy +
@@ -891,18 +891,18 @@ opposite, a consistent purity-for-batch-mixing trade-off. That's 4-to-2
 in favor of the trade-off pattern. **The honest, complete conclusion:
 Sinkhorn's "beats MMD on everything" result looks specific to
 Stephenson's particular structure, not Sinkhorn's general behavior.**
-Its real, generalizable signature — confirmed across four independent
-datasets now — is a systematic trade-off relative to MMD, not a strict
+Its real, generalizable signature (confirmed across four independent
+datasets now) is a systematic trade-off relative to MMD, not a strict
 improvement, completing all three of MMD's original validation axes
 (cross-backbone: positive; replicate-structure and scIB: both show the
 same consistent trade-off).
 
 **Net assessment: Sinkhorn is a real, validated alternative mechanism
-with a genuinely different (not simply better) profile than MMD's — not
+with a genuinely different (not simply better) profile than MMD's, not
 a replacement for it.** All three of the axes MMD was validated on are
 now checked (cross-backbone: positive; replicate-structure and scIB: both
 show the same consistent purity-for-batch-mixing trade-off). Stays off by
-default (`sinkhorn_weight: 0.0`) — see **Configuration**. If batch-mixing
+default (`sinkhorn_weight: 0.0`); see **Configuration**. If batch-mixing
 matters most for your use case, `mmd_weight=20` is still the better
 choice; if biological-signal preservation (cell-type purity, donor
 retrieval) matters most and you can tolerate the runtime cost,
@@ -912,7 +912,7 @@ retrieval) matters most and you can tolerate the runtime cost,
 escape the curve? A single-seed sweep looked promising; a proper 3-seed
 check shows it doesn't.** Motivated directly by the Levy result above:
 MMD and Sinkhorn have complementary weaknesses there (MMD weak on donor
-retrieval/cell-type purity, Sinkhorn weak on batch-mixing) — real
+retrieval/cell-type purity, Sinkhorn weak on batch-mixing), real
 evidence they might be correcting different parts of the problem, worth
 testing rather than assuming. `correction_loss` already supports both
 weights simultaneously; a single-seed grid (`mmd_weight` ∈ {10, 20},
@@ -931,79 +931,79 @@ points across 3 seeds:
 | mmd_weight=10 + sinkhorn_weight=0.5 | 0.755 ± 0.043 (within noise of Sinkhorn alone) |
 
 The "every combined config wins on donor retrieval" finding was single-seed
-noise, not a real synergy — donor retrieval has real seed-to-seed variance
+noise, not a real synergy; donor retrieval has real seed-to-seed variance
 at this scale (std up to 0.043) that one seed doesn't reveal. Honest
 conclusion: `mmd_weight=20`+`sinkhorn_weight=0.5` does show a real,
 seed-robust batch-mixing improvement over either mechanism alone (0.236 ±
 0.003), but at a genuine cost to both donor retrieval and cell-type
-purity — a different trade-off point, not an escape from the curve.
+purity, a different trade-off point, not an escape from the curve.
 Combining the mechanisms lands on the same trade-off surface every other
 mechanism in this project has, just at a new point on it.
 
 Getting a real 3-seed check done at all required a genuine performance
 fix first: `correction_loss` computes `mmd_loss`/`sinkhorn_ot_loss` by
-looping over every batch-pair in Python — at Levy's 8 batches (up to
+looping over every batch-pair in Python; at Levy's 8 batches (up to
 C(8,2)=28 pairs, Sinkhorn needing 50 iterations each) that's dozens of
 small sequential GPU kernel launches per minibatch, and the single-seed
 sweep above took ~50-55 min/seed for Sinkhorn-containing configs.
 `scripts/_vectorized_batch_losses.py` batches every pair into one
-tensor op instead — numerically verified equivalent to `losses.py`'s
+tensor op instead, numerically verified equivalent to `losses.py`'s
 functions (including a gradient check), cutting the same configs to
 ~3 min/seed (a ~16x speedup). It's kept separate from `losses.py` rather
-than modifying those functions in place — they're validated and tested,
-and this avoids any risk to that history — and diverges from the
+than modifying those functions in place (they're validated and tested,
+and this avoids any risk to that history), and diverges from the
 sequential version's exact trained-model output after enough training
 steps (verified: loss values match to ~1e-6 in the first step, drifting
-to ~1e-3 by the third — ordinary floating-point summation-order
+to ~1e-3 by the third, ordinary floating-point summation-order
 non-associativity compounding through many SGD steps, not a bug; this is
 why the seed-check used the vectorized version's own numbers throughout
 rather than trying to reproduce the single-seed sweep's exact values).
 
 **Three real architecture changes tried, on top of the loss-mechanism
-exploration above — none escaped the curve, and that convergence is
+exploration above: none escaped the curve, and that convergence is
 itself the finding.** All three live in a separate, ungitted sibling
 directory (`scanchor-architecture-experiment/`, outside this repo, kept
 around for further exploration) that Sinkhorn was originally ported
-from — not part of this package, but summarized here since together they
-change the honest answer to "can this trade-off be escaped."
+from. They're not part of this package, but are summarized here since
+together they change the honest answer to "can this trade-off be escaped."
 
 - **Neighbor-attention**: cross-attend each cell to its nearest neighbors
   in *other* batches (a direct, local signal about what similar cells
   elsewhere look like) instead of relying only on a global loss term.
   Result: neutral/negative (batch-mixing 0.8544 vs. published 0.8501,
-  cell-type purity 0.7053 vs. 0.7059 — essentially a wash, no clear win).
+  cell-type purity 0.7053 vs. 0.7059, essentially a wash, no clear win).
 - **Mixture-of-experts by cell type**: route each cell through a soft
   mixture of specialized correction sub-networks instead of one shared
   network, motivated by real batch effects hitting different cell types
   differently. First attempt collapsed to one expert handling 20,411 of
-  21,336 cells (6 of 8 experts got exactly zero) — a real MoE
+  21,336 cells (6 of 8 experts got exactly zero), a real MoE
   load-balancing failure, not evidence against the hypothesis. Fixed
   with a standard entropy-based load-balancing auxiliary loss: usage
   became genuinely uniform and the gate learned real cell-type structure
-  (NMI(gate, true cell type) = 0.468 vs. NMI(gate, true batch) = 0.007 —
+  (NMI(gate, true cell type) = 0.468 vs. NMI(gate, true batch) = 0.007,
   confirmed empirically, not assumed). Even so, the corrected-embedding
   outcome was nearly identical to the broken version (batch-mixing Δ
-  +0.141 both times, purity Δ +0.092 vs. +0.093) — a properly-working,
+  +0.141 both times, purity Δ +0.092 vs. +0.093), a properly-working,
   verified implementation of cell-type-specialized capacity, and it
   still didn't move the trade-off.
 - **Batch-statistic conditioning**: condition the correction network on
-  each batch's own (mean, std) in the raw embedding space — computed
-  directly from a batch's own cells, not a learned ID embedding from a
-  fixed vocabulary — targeting the specific gap that a genuinely new
+  each batch's own (mean, std) in the raw embedding space, computed
+  directly from a batch's own cells rather than a learned ID embedding
+  from a fixed vocabulary, targeting the specific gap that a genuinely new
   batch at inference otherwise gets an "unknown batch" fallback with no
   real information about it. Result: worse than the plain baseline on
   *both* axes (batch-mixing Δ +0.126 vs. baseline's +0.120, purity Δ
-  +0.080 vs. +0.085) — not another point on the curve, strictly
+  +0.080 vs. +0.085), not another point on the curve, strictly
   dominated by not adding the mechanism at all.
 
-**Six genuinely different interventions — two loss mechanisms, their
-combination, and three architecture changes — all converge on the same
+**Six genuinely different interventions, two loss mechanisms, their
+combination, and three architecture changes, all converge on the same
 trade-off surface, including one (the load-balanced MoE) that was
 independently verified to be doing exactly what it was designed to do.**
 That convergence, across both the loss axis and the architecture axis,
 is real evidence the batch-mixing-vs-bio-purity trade-off is a structural
-property of this problem class — single-pass, per-cell correction of a
-frozen embedding, whatever the loss or internal architecture — not a
+property of this problem class (single-pass, per-cell correction of a
+frozen embedding, whatever the loss or internal architecture), not a
 fixable limitation of any one mechanism tried. The remaining paths to a
 qualitatively different outcome likely require changing what information
 the correction step has access to, not another loss or network-internals
@@ -1026,12 +1026,12 @@ For local development, `pip install -e ".[scgpt]"` from a repo clone instead.
 
 **Older HPC clusters (RHEL7-era, old GCC/glibc):** a plain `pip install
 scanchor` can fail while building `pandas` from source
-(`ERROR: Compiler cython cannot compile programs` or similar) — some
+(`ERROR: Compiler cython cannot compile programs` or similar); some
 `pandas`/`h5py` releases stop shipping prebuilt wheels for old glibc, and
 this old-toolchain problem is exactly what this project's own cluster
 scripts had to work around repeatedly (see git history). Verified fix,
 tested on the same cluster this project runs on: pre-install known-good
-pinned versions first, *then* install scanchor —
+pinned versions first, *then* install scanchor:
 
 ```bash
 pip install "pandas<2.3" "h5py==3.14.0"
@@ -1042,8 +1042,8 @@ This isn't pinned in `scanchor`'s own dependencies by default, since it
 would unnecessarily hold back `pandas`/`h5py` for the majority of users on
 modern systems where newer versions install from wheels just fine.
 
-Download a scGPT checkpoint from the [model zoo](https://github.com/bowang-lab/scGPT#pretrained-scgpt-model-zoo)
-— use **`continual pretrained`**, not `brain` or `whole-human` (see Current
+Download a scGPT checkpoint from the [model zoo](https://github.com/bowang-lab/scGPT#pretrained-scgpt-model-zoo).
+Use **`continual pretrained`**, not `brain` or `whole-human` (see Current
 results above). On macOS/CPU, also pass `use_fast_transformer=False` to
 `extract_embeddings` (no `flash-attn`); `scgpt_extract.py` already works
 around two Linux-only assumptions in the upstream package (`os.sched_getaffinity`
@@ -1070,22 +1070,22 @@ python -m scanchor.evaluate.leave_one_batch_out --config configs/default.yaml
 ## Configuration
 
 `configs/default.yaml` (loaded by `scanchor.config.load_config` as a plain
-dict — no schema class, no hidden defaults beyond the `.get()` fallbacks
+dict, no schema class, no hidden defaults beyond the `.get()` fallbacks
 visible in `train.py`/the evaluate modules) is the stable public interface
 as of 1.0: its four top-level sections (`reference_panel`, `model`,
 `training`, `validation`) and every key under them are the contract this
-project commits to from here on — a key being renamed, removed, or
+project commits to from here on: a key being renamed, removed, or
 changed to mean something different is a breaking change and gets called
 out in CHANGELOG.md, not made silently. Adding a new *optional* key with a
 backward-compatible default is not a breaking change.
 
-The file itself is the documentation — every non-obvious key has an
+The file itself is the documentation: every non-obvious key has an
 inline comment tracing back to the specific real experiment that set its
 current value (see Current results above for the underlying evidence), so
 it isn't duplicated here. Two things worth knowing before editing it:
 
 - **Every field with a real, validated default is annotated with *why* in
-  the comment right above it** — if you're about to change one, read that
+  the comment right above it**: if you're about to change one, read that
   comment first; several look like they'd be free wins (e.g. bumping
   `discriminator_hidden_dim` or turning `mmd_multi_scale` on) but were
   specifically tested and didn't validate.
@@ -1109,25 +1109,25 @@ Two tests, deliberately independent of any enrichment/eQTL statistics:
    different-donor pairs within the same batch.
 2. **Leave-one-batch-out generalization**: train on all-but-one batch, embed
    the held-out batch using only its covariates, and check batch signal is
-   still removed. This is the actual claim under test — inductive
-   generalization to an unseen batch — and it's the part existing transductive
+   still removed. This is the actual claim under test, inductive
+   generalization to an unseen batch, and it's the part existing transductive
    tools aren't built for.
 
-Baselines (Harmony, scVI — see Current results) are run in their normal
-transductive mode — with full access to the held-out batch — for
+Baselines (Harmony, scVI; see Current results) are run in their normal
+transductive mode (with full access to the held-out batch) for
 comparison. The goal is to approach transductive performance without
 needing the new batch's data. (scDisInFact was originally planned as a
-third baseline here but hadn't actually been run — see Next steps for
+third baseline here but hadn't actually been run; see Next steps for
 where that stands and why it's a different kind of comparison than
 Harmony/scVI.)
 
 **True cross-study zero-shot transfer: the sharpest test of the inductive
-claim — and it's asymmetric, not a general property.** Every generalization
-test above holds out a batch *within the same study* — Levy's
+claim, and it's asymmetric, not a general property.** Every generalization
+test above holds out a batch *within the same study*: Levy's
 leave-one-batch-out, Jerber's own leave-one-pool-out. Neither tests the
 thing this project is actually built around: a correction head trained on
 one study, applied with **no retraining** to a completely different one.
-Tested both directions with the shipped default (`mmd_weight=20`) — every
+Tested both directions with the shipped default (`mmd_weight=20`); every
 batch/pool ID in the target study is a string the source study's vocab has
 never seen, so 100% of cells hit the UNK categorical embedding in both
 directions (verified directly, not assumed). Evaluated purely on the target
@@ -1143,19 +1143,19 @@ cells into one metric:
 
 **The two directions don't agree.** Levy → Jerber recovers roughly a
 quarter of the in-distribution batch-mixing improvement without damaging
-cell-type purity — a real, if modest, positive result. Jerber → Levy does
+cell-type purity, a real, if modest, positive result. Jerber → Levy does
 the opposite: batch-mixing gets *worse* than doing nothing at all, while
 cell-type purity still improves. Cross-study transfer is a real
-phenomenon here, not nothing — every categorical covariate is forced to
+phenomenon here, not nothing: every categorical covariate is forced to
 UNK in both directions, so whatever's happening comes from the continuous
-covariates and the embedding itself, not anything study-specific — but
+covariates and the embedding itself, not anything study-specific. But
 it's direction-dependent, not a general "this generalizes across studies"
 result.
 
-**Ruled out source-dataset size as the driver.** The initial hypothesis —
-Jerber's training subsample (7,252 cells) being smaller than Levy's
-reference panel (18,238 cells) makes its correction function less
-well-calibrated for cross-study transfer — is testable in isolation:
+**Ruled out source-dataset size as the driver.** The initial hypothesis
+(Jerber's training subsample, 7,252 cells, being smaller than Levy's
+reference panel, 18,238 cells, makes its correction function less
+well-calibrated for cross-study transfer) is testable in isolation:
 subsample Levy down to Jerber's exact scale (7,252 cells) while keeping
 Levy's own dense 8-donor/8-batch crossing intact (donor-crossing density
 can't be matched the other way; Levy only has 8 donors, all densely
@@ -1170,77 +1170,77 @@ transfer to Jerber against the full 18.2k-cell head's:
 
 Both sizes transfer to Jerber in the *same direction* (batch-mixing
 improves), just with the smaller source giving a somewhat weaker effect
-(Δ −0.006 vs. −0.010) — nothing like Jerber→Levy's sign-flipped result
+(Δ −0.006 vs. −0.010), nothing like Jerber→Levy's sign-flipped result
 (Δ +0.011, worse than doing nothing). Matching Jerber's exact cell count
 didn't reproduce Jerber's transfer behavior, which rules out **source
-size alone** as the explanation. The two remaining candidates — Jerber's
+size alone** as the explanation. The two remaining candidates (Jerber's
 sparse donor-crossing structure, and something about the *direction*
-of biological maturity (progenitor→mature vs. mature→progenitor) —
+of biological maturity, progenitor→mature vs. mature→progenitor)
 weren't isolated by this test and would need a source dataset with Levy's
 scale but Jerber-like crossing sparsity, or a third, unrelated dataset, to
-tell apart. Single seed, one dataset pair — see Next steps.
+tell apart. Single seed, one dataset pair; see Next steps.
 
 ## Next steps
 
 Shipping now with the open problems above documented rather than waiting on
-these — they're the concrete roadmap, not a hidden gap:
+these: they're the concrete roadmap, not a hidden gap:
 
-1. **Full ~81k-cell Levy dataset** — the discriminator-capacity sweep above
+1. **Full ~81k-cell Levy dataset**: the discriminator-capacity sweep above
    already showed data volume doesn't move batch-mixing, so this is lower
    priority than it might seem, but would confirm donor-retrieval gains hold
    at the full scale rather than just the 18.2k-cell subsample.
 2. **The cross-study transfer asymmetry's exact driver is a known,
    documented limitation, closed out rather than actively pursued for
-   1.0.** Source-dataset size is ruled out (see above) — a Levy source
+   1.0.** Source-dataset size is ruled out (see above): a Levy source
    matched to Jerber's exact cell count still transferred in the *same*
    direction as the full-size source, just weaker. What's left unisolated:
-   Jerber's sparse donor-crossing structure (162 total donors, 25 crossed
-   — can't be reproduced from Levy's 8 densely-crossed donors) and the
+   Jerber's sparse donor-crossing structure (162 total donors, 25 crossed,
+   which can't be reproduced from Levy's 8 densely-crossed donors) and the
    direction of biological maturity (progenitor→mature vs.
    mature→progenitor, which the two-dataset design can't separate from
    "which study is which"). Telling these apart needs a third dataset or
    an artificially-sparsified source, real new data-collection effort
-   rather than more analysis of what's already in hand — not worth
+   rather than more analysis of what's already in hand; not worth
    blocking 1.0 on. Revisit if a natural third dataset shows up rather
    than seeking one out specifically for this.
 3. **scDisInFact/CODAL/sysVI: a real feasibility check found they're not as
    directly comparable as this README previously implied.** All three are
    full generative models (VAE or topic model) trained on raw/normalized
    counts, not a post-hoc correction layer on frozen foundation-model
-   embeddings like scAnchor — the same operating-mode difference already
+   embeddings like scAnchor, the same operating-mode difference already
    documented for the scVI baseline above, not a new caveat. Concretely:
    - **CODAL** isn't a standalone package (it's the inference algorithm
      inside `mira-multiome`), maintenance is stale (~16 months since the
      last real commit), and it caps `torch<=2.0.0` while pulling in
      unrelated heavyweight genomic-motif dependencies (`lisa2`,
-     `mira-moods`) — not worth pursuing.
+     `mira-moods`); not worth pursuing.
    - **sysVI** ships inside `scvi.external` as of scvi-tools 1.3.0 (its
      original standalone repo explicitly says it won't be maintained
-     further) — well-engineered, but the exact torch/lightning/scvi-tools
+     further), well-engineered, but the exact torch/lightning/scvi-tools
      dependency chain that already cost a full session of install
      troubleshooting on this cluster, for a method that (like scVI)
      trains on raw counts anyway. Not worth the risk for likely the same
      kind of result the scVI baseline already gives.
    - **scDisInFact** was the one worth attempting, and has now been run
      end-to-end against scAnchor and Harmony on a real public dataset
-     (Stephenson et al. 2021 — see Current results): lightweight,
-     plain-torch dependencies (no scvi-tools at all), and — unlike scVI —
+     (Stephenson et al. 2021; see Current results): lightweight,
+     plain-torch dependencies (no scvi-tools at all), and, unlike scVI,
      its actual purpose is disentangling batch/condition effects, closer
      in spirit to scAnchor's covariate conditioning than a general
      integration tool. Verdict: it's the only method of the three that
      genuinely improved batch-mixing there, at a real cost to cell-type
-     purity — no method won cleanly, see Current results for the honest
+     purity; no method won cleanly, see Current results for the honest
      three-way comparison.
 
 ## Reference panel
 
 - **Public domain validation (used above):** [scIB benchmark
   tasks](https://theislab.github.io/scib-reproducibility/) (immune, pancreas,
-  lung atlases) — standard, small, cell-type labeled, multi-batch, and
+  lung atlases), standard, small, cell-type labeled, multi-batch, and
   already the comparison point for every batch-correction baseline.
 - **Public domain validation (used above):** Jerber et al. 2021, *Nat Genet*,
   population-scale scRNA-seq across dopaminergic neuron differentiation
-  (HipSci, multiplexed across differentiation pools) —
+  (HipSci, multiplexed across differentiation pools):
   https://www.nature.com/articles/s41588-021-00801-6. Processed per-timepoint
   AnnData-compatible `.h5` files (day 11/30/52, raw + normalized counts, real
   `donor_id`/`pool_id`/`celltype` obs columns) are on Zenodo:
@@ -1249,19 +1249,19 @@ these — they're the concrete roadmap, not a hidden gap:
   steps).
 - **Public domain validation (used above):** Stephenson et al. 2021,
   *Nat Med*, single-cell multi-omics analysis of the immune response in
-  COVID-19 — https://doi.org/10.1038/s41591-021-01329-2. CELLxGENE-hosted
+  COVID-19: https://doi.org/10.1038/s41591-021-01329-2. CELLxGENE-hosted
   h5ad (647,366 cells, 3 processing sites, 4 disease-status categories, 120
   donors): https://datasets.cellxgene.cziscience.com/fe2e847c-1602-4f1b-86a4-112e4dc7a8e3.h5ad.
-  `var_names` in this file are Ensembl IDs, not gene symbols — real symbols
+  `var_names` in this file are Ensembl IDs, not gene symbols; real symbols
   are in `var["feature_name"]`; raw counts are in `.raw.X`, not `.X` (both
-  confirmed directly from the file, not assumed — see
+  confirmed directly from the file, not assumed; see
   `scripts/run_stephenson_benchmark.py`'s `build_subsample()`).
 
 ## References
 
 - Batch effects as a barrier to universal single-cell foundation model
-  embeddings (bioRxiv, 2025) — motivates this project directly.
-- scDisInFact, CODAL (via `mira-multiome`), sysVI (via `scvi.external`) —
+  embeddings (bioRxiv, 2025); motivates this project directly.
+- scDisInFact, CODAL (via `mira-multiome`), sysVI (via `scvi.external`):
   transductive, counts-based disentangled batch correction; the baselines
   this complements rather than replaces, not a like-for-like comparison to
   scAnchor's frozen-embedding correction (see Current results / Next

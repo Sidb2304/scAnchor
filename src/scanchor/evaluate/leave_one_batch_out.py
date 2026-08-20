@@ -3,7 +3,7 @@
 Applies a head trained WITHOUT the held-out batch to that batch's embeddings,
 using only its covariates (never its cells during training), then checks
 whether batch signal is still removed relative to the reference panel the
-head *was* trained on. This is the literal inductive-generalization claim —
+head *was* trained on. This is the literal inductive-generalization claim:
 the part transductive tools (Harmony, scVI, scDisInFact) aren't built for,
 since they require the held-out batch present at correction time.
 """
@@ -42,7 +42,7 @@ def run(config: dict, checkpoint_path: str | Path) -> dict:
     trained_batches = set(vocab.vocabs.get(ref_cfg["batch_col"], {}).keys())
     leaked = held_out_batches & trained_batches
     if leaked:
-        raise ValueError(f"Held-out batch(es) {leaked} were seen during training — not a valid test.")
+        raise ValueError(f"Held-out batch(es) {leaked} were seen during training, so this is not a valid test.")
 
     head = CorrectionHead(
         embed_dim=model_cfg["embed_dim"],

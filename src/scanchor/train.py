@@ -24,8 +24,8 @@ def train(config: dict) -> CorrectionHead:
     if seed is not None:
         # Without this, comparing two configs (e.g. discriminator capacity,
         # loss weights) is confounded by a different random model init and
-        # DataLoader shuffle order each run -- a real problem hit in practice:
-        # reducing adversarial_weight (which should ease pressure on donor
+        # DataLoader shuffle order each run. This is a real problem hit in
+        # practice: reducing adversarial_weight (which should ease pressure on donor
         # retrieval) instead made it *worse* than a higher-weight run, a
         # non-monotonic result impossible to interpret without knowing how
         # much of it is init/shuffle noise vs. the actual change being tested.
@@ -44,7 +44,7 @@ def train(config: dict) -> CorrectionHead:
     if len(loader) == 0:
         raise ValueError(
             f"reference panel has {len(dataset)} cells but batch_size={train_cfg['batch_size']} "
-            "with drop_last=True -- every epoch would silently run zero minibatches (the head "
+            "with drop_last=True: every epoch would silently run zero minibatches (the head "
             "never trains and every metric stays at its identity-init value with no error raised). "
             "Lower training.batch_size or provide more reference data."
         )

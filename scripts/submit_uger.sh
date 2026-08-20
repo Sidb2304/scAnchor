@@ -13,21 +13,21 @@
 # evaluations) on the Levy schizophrenia iPSC astrocyte mini-village dataset.
 #
 # Paths below use the /stanley/nehme_lab/... convention seen in this lab's
-# other UGER scripts (submit_neuro_gwas.sh, run_star_0801.sh, etc.) --
-# i.e. the cluster-side path for what's mounted at /Volumes/stanley_nehme_lab
+# other UGER scripts (submit_neuro_gwas.sh, run_star_0801.sh, etc.), i.e.
+# the cluster-side path for what's mounted at /Volumes/stanley_nehme_lab
 # on macOS. If that mapping is wrong for some reason, the preflight check
 # below will say exactly which path doesn't exist rather than failing
 # confusingly mid-job.
 #
 # GPU: no existing script in this lab's history requests one, so the exact
-# UGER GPU queue/flag for this cluster is unverified -- check `qconf -sql`
+# UGER GPU queue/flag for this cluster is unverified; check `qconf -sql`
 # or your cluster admin, then uncomment and fix the `-l gpu=1` line above.
 # The Python side auto-detects CUDA either way, so without a working GPU
-# flag this just runs on CPU (slower, not wrong) -- see the timing estimate
+# flag this just runs on CPU (slower, not wrong); see the timing estimate
 # below for what that costs at full dataset scale.
 #
-# One-time setup (run on a cluster login node, NOT part of this job --
-# conda environments are platform-specific, this can't be prepared from a
+# One-time setup (run on a cluster login node, NOT part of this job,
+# since conda environments are platform-specific, this can't be prepared from a
 # Mac and copied over):
 #
 #   conda create --prefix /stanley/nehme_lab/Siddharth/conda_envs/scanchor python=3.10 -y
@@ -66,7 +66,7 @@ mkdir -p "$OUT_DIR" "$REPO_DIR/logs"
 # --- end preflight check ---
 # Note: this mkdir happens AFTER SGE has already tried to open the -o log
 # path above, so it doesn't help THIS run if logs/ was missing at qsub
-# time -- it's just defensive for next time. logs/ must already exist
+# time; it's just defensive for next time. logs/ must already exist
 # in $REPO_DIR before you run qsub.
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -84,6 +84,6 @@ echo "Finished: $(date)"
 
 # Rough timing estimate from local (Mac CPU) testing: ~0.15-0.2s/cell for
 # scGPT embedding extraction alone. At ~81k cells that's roughly 3-4.5 hours
-# on CPU before training/eval even start -- h_rt=12:00:00 above gives
+# on CPU before training/eval even start; h_rt=12:00:00 above gives
 # generous headroom, adjust if your cluster's CPUs are meaningfully slower.
 # With a working GPU this should be dramatically faster.

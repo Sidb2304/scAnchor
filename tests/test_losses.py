@@ -197,7 +197,7 @@ def test_mmd_loss_ignores_batches_with_fewer_than_two_cells():
 
 
 def test_mmd_loss_multi_scale_default_matches_single_scale():
-    """multi_scale defaults to False -- existing validated numbers unaffected."""
+    """multi_scale defaults to False, so existing validated numbers are unaffected."""
     torch.manual_seed(0)
     x = torch.randn(10, 8)
     y = torch.randn(10, 8) + 5.0
@@ -297,7 +297,7 @@ def test_class_conditional_mmd_loss_finite_and_positive_when_shifted_within_labe
     y = torch.randn(10, 8) + 5.0
     embeddings = torch.cat([x, y], dim=0)
     batch_ids = torch.cat([torch.zeros(10, dtype=torch.long), torch.ones(10, dtype=torch.long)])
-    labels = torch.zeros(20, dtype=torch.long)  # single cell type -- same as plain mmd_loss here
+    labels = torch.zeros(20, dtype=torch.long)  # single cell type, same as plain mmd_loss here
 
     loss = class_conditional_mmd_loss(embeddings, batch_ids, labels)
 
@@ -310,7 +310,7 @@ def test_class_conditional_mmd_loss_ignores_composition_confound_global_mmd_woul
 
     Two batches with different cell-type *composition* (batch 0 is mostly
     label 0, batch 1 is mostly label 1) but embeddings are drawn from the
-    identical distribution within each label regardless of batch -- there
+    identical distribution within each label regardless of batch, so there
     is no real batch effect, only a composition difference. Global mmd_loss
     picks up the composition difference as if it were batch structure;
     class_conditional_mmd_loss, restricted to same-label comparisons only,
@@ -343,7 +343,7 @@ def test_class_conditional_mmd_loss_uses_shared_bandwidth_not_per_label():
 
     Recomputing the median heuristic separately on each small per-cell-type
     subset (the original implementation) gave a noisy, inconsistent length
-    scale from one cell type to the next -- a real sweep found this
+    scale from one cell type to the next; a real sweep found this
     destabilized training. Verify the fix directly: patching
     `_median_heuristic_sigma` and counting calls should show it's invoked
     once per `class_conditional_mmd_loss` call (the shared bandwidth), not
@@ -394,7 +394,7 @@ def test_correction_loss_conditional_mmd_term_inert_when_weight_zero():
     torch.manual_seed(0)
     original = torch.randn(12, 8)
     corrected = original + 5.0 * torch.randn(12, 8)
-    # 2 labels x 2 batches x 3 cells each -- guarantees every label has
+    # 2 labels x 2 batches x 3 cells each guarantees every label has
     # enough same-label cells crossing both batches for the term to be
     # provably nonzero, not just "probably" with random labels.
     labels = torch.tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1])
@@ -462,7 +462,7 @@ def test_sinkhorn_ot_loss_finite_not_nan_over_many_iterations():
     architecture experiment this was ported from: the dual updates must
     REPLACE f/g each iteration, not accumulate onto the previous value.
     Accumulating diverges to NaN well within 50 iterations regardless of
-    epsilon or cost scale -- run enough iterations that the old, buggy
+    epsilon or cost scale. Run enough iterations that the old, buggy
     version would already have failed."""
     torch.manual_seed(0)
     x = torch.randn(15, 8)

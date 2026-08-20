@@ -2,7 +2,7 @@
 
 The variance-floor term exists because the scIB benchmarking blind spot means
 a contrastive loss alone can quietly collapse within-cell-type variance to
-minimize itself — appearing to "integrate well" while destroying exactly the
+minimize itself, appearing to "integrate well" while destroying exactly the
 biological heterogeneity the correction is supposed to preserve. We guard
 against that directly during training rather than relying on it showing up
 in a post-hoc metric.
@@ -58,7 +58,7 @@ def donor_consistency_loss(
     to same-donor-different-batch pairs (not same-donor-same-batch, which is
     already trivially satisfied and wouldn't teach the head anything about
     cross-batch donor identity). It's only learnable when the reference panel
-    has donors crossed with batches — a donor represented in only one batch
+    has donors crossed with batches; a donor represented in only one batch
     gives no valid positive pair and is excluded via `has_positive`.
 
     Cells with donor_ids < 0 (donor identity unknown/not applicable) are
@@ -114,7 +114,7 @@ def variance_floor_penalty(
 def _median_heuristic_sigma(x: torch.Tensor) -> torch.Tensor:
     """Standard RBF-kernel bandwidth choice: the median pairwise distance.
 
-    Computed under no_grad -- the bandwidth is a fixed scale choice per
+    Computed under no_grad, since the bandwidth is a fixed scale choice per
     minibatch, not something we want gradients flowing back through (that
     would let the loss cheat by shrinking the kernel width instead of
     actually moving the embeddings).
@@ -133,8 +133,8 @@ def _rbf_kernel_mean(a: torch.Tensor, b: torch.Tensor, sigma: torch.Tensor, mult
     """Mean RBF kernel value between every row of `a` and every row of `b`.
 
     `multi_scale=True` sums the kernel at `_MMD_KERNEL_SCALES` multiples of
-    `sigma` and averages, instead of using `sigma` alone -- a standard MMD
-    variant (e.g. Long et al.'s Deep Adaptation Networks) meant to make the
+    `sigma` and averages, instead of using `sigma` alone. This is a standard
+    MMD variant (e.g. Long et al.'s Deep Adaptation Networks) meant to make the
     loss less sensitive to picking exactly the right bandwidth, since a
     single median-heuristic estimate can be off for any given minibatch.
     Averaging (not summing) the per-scale kernels keeps the aggregate at a
@@ -160,14 +160,14 @@ def _pairwise_mmd_sum(
     """Sum of pairwise MMD^2 across every pair of batches present, and the pair count.
 
     Shared kernel math for both `mmd_loss` (global) and
-    `class_conditional_mmd_loss` (per cell type) below -- factored out so
+    `class_conditional_mmd_loss` (per cell type) below, factored out so
     both compute the exact same RBF-MMD rather than risking the two drifting
     apart. Returns (0, 0) if fewer than 2 batches, or every batch present
-    has <2 cells -- callers turn that into an inert 0 loss.
+    has <2 cells; callers turn that into an inert 0 loss.
 
     `sigma`: pass a precomputed bandwidth to use instead of the median
     heuristic on this call's own `embeddings`. `class_conditional_mmd_loss`
-    uses this -- computing the bandwidth fresh on each small per-cell-type
+    uses this, since computing the bandwidth fresh on each small per-cell-type
     subset gave a noisy, inconsistent length scale from one cell type (and
     one minibatch) to the next, which a real sweep found destabilized
     training rather than helping (see README). `mmd_loss` doesn't pass this,
@@ -209,14 +209,14 @@ def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor, multi_scale: boo
 
     An explicit alternative mechanism to the adversarial discriminator, not
     another variant of it. Adversarial training relies on a classifier
-    "keeping up" in a min-max game -- fragile by construction, and the exact
-    failure mode hit earlier in this project (a fixed adversarial strength
-    caused runaway divergence). MMD has no learnable parameters and no
-    min-max dynamics: it's a direct, differentiable statistical distance
+    "keeping up" in a min-max game, which is fragile by construction, and the
+    exact failure mode hit earlier in this project (a fixed adversarial
+    strength caused runaway divergence). MMD has no learnable parameters and
+    no min-max dynamics: it's a direct, differentiable statistical distance
     between each batch's embedding distribution and every other batch's,
-    using an RBF kernel. Motivated by a real result, not just theory: Harmony
-    -- which works via distributional alignment, not an adversarial
-    classifier -- measurably improved batch-mixing on this exact data/metric
+    using an RBF kernel. Motivated by a real result, not just theory: Harmony,
+    which works via distributional alignment rather than an adversarial
+    classifier, measurably improved batch-mixing on this exact data/metric
     where the adversarial approach here consistently regressed it.
 
     Requires >=2 batches with >=2 cells each in the minibatch to compute
@@ -224,7 +224,7 @@ def mmd_loss(embeddings: torch.Tensor, batch_ids: torch.Tensor, multi_scale: boo
     donor_consistency_loss.
 
     `multi_scale=False` (default) reproduces the exact single-bandwidth
-    formula this project's dose-response sweep was validated against --
+    formula this project's dose-response sweep was validated against;
     set True to opt into the multi-kernel variant (see `_rbf_kernel_mean`),
     a separate, not-yet-validated mechanism.
     """
@@ -240,7 +240,7 @@ def class_conditional_mmd_loss(
     """MMD computed within each cell type separately, not globally.
 
     Global `mmd_loss` matches each batch's overall embedding distribution to
-    every other batch's -- it has no way to tell "batch structure" apart
+    every other batch's; it has no way to tell "batch structure" apart
     from "these batches just happen to have different cell-type
     composition," so at high weight it can pull cell types together as
     readily as it removes real batch structure (this project's real
@@ -252,7 +252,7 @@ def class_conditional_mmd_loss(
     Skips any cell type with fewer than 4 cells in this minibatch (not
     enough to plausibly split across >=2 batches with >=2 cells each) and
     pools the pairwise MMD sum/count across every cell type that did have
-    enough structure, rather than averaging per-cell-type averages -- this
+    enough structure, rather than averaging per-cell-type averages. This
     weights each valid (cell type, batch pair) equally regardless of how
     many cell types contributed one that minibatch. Returns 0 (inert) if no
     cell type had enough structure to compute anything, same pattern as
@@ -261,7 +261,7 @@ def class_conditional_mmd_loss(
     Uses ONE bandwidth computed from all cells in this minibatch (same scale
     `mmd_loss` itself would use), not a bandwidth recomputed per cell type.
     The first version of this function recomputed the median heuristic on
-    each small per-cell-type subset -- a real sweep found that destabilized
+    each small per-cell-type subset, and a real sweep found that destabilized
     training when weighted meaningfully (worse cell-type purity than global
     MMD alone, the opposite of the goal) rather than fixing the composition
     confound it targeted. A shared bandwidth keeps the length scale
@@ -288,7 +288,7 @@ def _sinkhorn_pairwise(a: torch.Tensor, b: torch.Tensor, epsilon: float = 0.1, n
     """Entropic-regularized OT cost (Sinkhorn distance) between two point clouds.
 
     Log-space dual (Sinkhorn-Knopp) fixed point, not the raw-space scaling
-    iteration -- raw-space repeatedly multiplies probability-scale factors
+    iteration, since raw-space repeatedly multiplies probability-scale factors
     and underflows to exactly 0 within a handful of iterations for anything
     but a tiny toy example. `cost` is rescaled by its own median before the
     iteration (the same median-heuristic convention `_median_heuristic_sigma`
@@ -296,11 +296,11 @@ def _sinkhorn_pairwise(a: torch.Tensor, b: torch.Tensor, epsilon: float = 0.1, n
     sane range regardless of the embedding's raw distance scale.
 
     Each dual-update line REPLACES f/g rather than accumulating onto the
-    previous iteration's value (`f = ...`, not `f = f + ...`) -- the
+    previous iteration's value (`f = ...`, not `f = f + ...`): the
     correct Sinkhorn fixed point recomputes each potential directly from
     the other at every step. An earlier version of this function
     accumulated instead, which is not standard Sinkhorn and diverged to
-    NaN within a few iterations regardless of epsilon or cost scaling --
+    NaN within a few iterations regardless of epsilon or cost scaling,
     caught and fixed during the architecture experiment this was ported
     from (see scanchor-architecture-experiment/).
     """
@@ -332,7 +332,7 @@ def sinkhorn_ot_loss(
     motivated trying neighbor-attention: every moment-matching mechanism
     already validated in this project (adversarial discriminator, every
     MMD variant) lands on the same batch-mixing-vs-cell-type-purity
-    trade-off curve regardless of the specific loss used -- real evidence
+    trade-off curve regardless of the specific loss used, real evidence
     the limitation could be about *mechanism class* (moment-matching),
     not the specific loss function. Sinkhorn tests that directly by using
     a mechanism from a genuinely different class.
@@ -340,15 +340,15 @@ def sinkhorn_ot_loss(
     Real, seed-checked result (3 seeds) on the Stephenson/scGPT reference
     panel already used for the published MMD numbers (see README's
     Current results): at sinkhorn_weight=0.5, this is not just another
-    point on the trade-off curve -- both batch-mixing regression (+0.030
+    point on the trade-off curve: both batch-mixing regression (+0.030
     vs. MMD's +0.120) and cell-type-purity improvement (+0.091 vs. MMD's
     +0.085) beat the published MMD mechanism simultaneously, with tight
     across-seed variance. NOT yet validated on the donor-retrieval /
     replicate-structure / cross-backbone axes that MMD's full "Current
-    results" were checked against -- off by default until those run;
+    results" were checked against. Off by default until those run;
     treat as a promising, real, but narrower-scope result than MMD's.
 
-    Used only as a TRAINING-time loss -- the transport plan itself is
+    Used only as a TRAINING-time loss: the transport plan itself is
     never part of the forward pass or used at inference. That's what
     keeps the correction head fully inductive despite OT's usual reliance
     on having the target batch's cells available in advance: a new/unseen
@@ -382,7 +382,7 @@ def sinkhorn_ot_loss(
 def adversarial_batch_loss(batch_logits: torch.Tensor, batch_ids: torch.Tensor) -> torch.Tensor:
     """Cross-entropy of a batch discriminator's predictions.
 
-    Call with logits from `BatchDiscriminator(corrected, lambd)` — the
+    Call with logits from `BatchDiscriminator(corrected, lambd)`. The
     discriminator's forward pass applies a gradient-reversal layer, so a
     single backward() through this loss trains the discriminator normally
     (better at predicting batch) while pushing the correction head to make
@@ -428,7 +428,7 @@ def correction_loss(
         adversarial_term = adversarial_batch_loss(batch_logits, batch_ids)
         total = total + adversarial_weight * adversarial_term
 
-    # Same cross-entropy math as the adversarial term above -- the direction
+    # Same cross-entropy math as the adversarial term above; the direction
     # (fight batch signal vs. absorb it) comes entirely from whether the
     # logits passed in went through a GRL (BatchDiscriminator) or not
     # (BatchAbsorber), not from anything in this loss function.

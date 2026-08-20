@@ -14,26 +14,26 @@ class CorrectionHead(nn.Module):
     The residual formulation (`e' = e + delta`) rather than `e' = f(e)` matters:
     it keeps the head close to the identity map at initialization, so training
     starts from "trust the foundation model" and only learns to move cells as
-    far as the covariate-conditioned signal justifies — rather than having to
+    far as the covariate-conditioned signal justifies, rather than having to
     relearn a faithful reconstruction of `e` from scratch.
 
     `max_delta_ratio` bounds ||delta|| to at most this fraction of ||embedding||
     per cell. Without it, an adversarial batch-discriminator objective has a
     degenerate way to "win": blow up embedding magnitude in some direction
     that saturates the discriminator's logits, rather than genuinely removing
-    batch structure. That's not a hypothetical -- unbounded delta is what
+    batch structure. That's not a hypothetical: unbounded delta is what
     caused a real runaway divergence on real data (adversarial loss climbing
     into the tens of thousands over training, every downstream metric
     collapsing). The variance-floor loss doesn't catch this: it only
     penalizes variance dropping too low, not growing unbounded.
 
-    A second, small network produces `z_batch` -- a compact latent meant to
+    A second, small network produces `z_batch`, a compact latent meant to
     *absorb* batch-predictive variance (trained normally, not adversarially,
     to actually predict batch well) rather than fight it out of the main
     corrected embedding. Without this split, one shared embedding has to
     simultaneously satisfy "pull together" objectives (contrastive on cell
     type, donor consistency) and "push apart from batch" (the adversarial
-    term) -- and that fight is a real, evidenced problem: batch-mixing
+    term), and that fight is a real, evidenced problem: batch-mixing
     regressed after correction across every dataset, scale, and
     discriminator capacity tried before this. `z_batch` gives batch-specific
     variance somewhere to go instead of forcing it out of the representation
@@ -45,7 +45,7 @@ class CorrectionHead(nn.Module):
     hidden layer feeding both was the first version of this design, and it
     made things measurably worse on real data (donor retrieval collapsed to
     0.0, batch-mixing regressed 3x more than the single-embedding baseline
-    it was meant to fix) -- the batch-absorption objective converges far
+    it was meant to fix): the batch-absorption objective converges far
     faster than the contrastive/donor-consistency ones (near-zero within 1-2
     epochs vs. a flat plateau for the others), and a shared trunk let that
     fast-converging signal shape a representation the bio pathway also drew
@@ -85,8 +85,8 @@ class CorrectionHead(nn.Module):
             nn.Linear(hidden_dim, batch_latent_dim),
         )
         # Zero-init bio_net's last layer so delta starts at 0 and e' == e at
-        # step 0. batch_net has no such requirement -- it's discarded
-        # downstream, only its predictiveness during training matters.
+        # step 0. batch_net has no such requirement, since it's discarded
+        # downstream, and only its predictiveness during training matters.
         nn.init.zeros_(self.bio_net[-1].weight)
         nn.init.zeros_(self.bio_net[-1].bias)
 

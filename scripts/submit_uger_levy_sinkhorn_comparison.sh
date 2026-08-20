@@ -10,28 +10,28 @@
 ###############################################################################
 # Trains scripts/run_levy_sinkhorn_comparison.py's mmd_weight=20 vs
 # sinkhorn_weight=0.5 comparison on the real, already-cached Levy scGPT
-# embeddings (levy_run/{reference,heldout}.h5ad -- extracted by
+# embeddings (levy_run/{reference,heldout}.h5ad, extracted by
 # submit_uger_levy_full_dataset.sh's earlier GPU job, no need to redo).
 #
 # This was first tried on the local Mac's CPU and found to be much slower
 # than expected: correction_loss always computes mmd_loss +
 # class_conditional_mmd_loss + sinkhorn_ot_loss every step regardless of
-# their weight (by design -- the metrics dict reports each term's real
+# their weight (by design, since the metrics dict reports each term's real
 # value even when unused), and at Levy's real 8-batch x 14-cell-type
 # scale that's up to 28 batch-pairs x 14 cell-types = 392 pairwise
 # kernel/Sinkhorn computations per minibatch, for terms half our runs
 # don't even weight. This is the first time this project's training loop
-# has run at this many batches -- Stephenson's 3 batches never surfaced
+# has run at this many batches; Stephenson's 3 batches never surfaced
 # this cost. GPU won't eliminate the O(many small ops) Python-loop
 # overhead entirely, but the actual tensor math each op does benefits
-# from it -- run_levy_sinkhorn_comparison.py was updated to move
+# from it, so run_levy_sinkhorn_comparison.py was updated to move
 # model+tensors to CUDA when available (it didn't originally).
 #
 # Same two proven fixes as every other GPU job in this project (gpu=1,
-# operating_system=RedHat8 -- see geneformer_feasibility scripts for the
+# operating_system=RedHat8; see geneformer_feasibility scripts for the
 # full backstory) and the same torch-CUDA-build fix already validated for
-# this env by submit_uger_levy_full_dataset.sh (cu121, NOT cu124 --
-# cu124's wheel index only goes back to torch 2.4.0 -- and WITHOUT
+# this env by submit_uger_levy_full_dataset.sh (cu121, NOT cu124,
+# since cu124's wheel index only goes back to torch 2.4.0, and WITHOUT
 # --no-deps, which silently skips installing the nvidia-cublas-cu12/
 # nvidia-cudart-cu12 etc. packages the CUDA build actually dlopens at
 # import time).

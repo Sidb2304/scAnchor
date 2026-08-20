@@ -12,14 +12,14 @@
 # atlas-level benchmarks (immune, pancreas, lung) were the one remaining
 # axis flagged as untested in README's Net assessment for sinkhorn_weight.
 #
-# Uses scripts/_vectorized_batch_losses.py from the start -- these
+# Uses scripts/_vectorized_batch_losses.py from the start, since these
 # datasets have real batch counts (immune=10, pancreas=9, lung=16, all
 # higher than Stephenson's 3, lung higher even than Levy's 8), and that
 # vectorization was a ~16x speedup at Levy's smaller scale.
 #
 # Reuses already-cached real scGPT embeddings
 # (scib_benchmark_run/{dataset}/{reference,heldout}.h5ad) from the
-# original MMD scIB validation -- no new embedding extraction, no new
+# original MMD scIB validation, so no new embedding extraction, no new
 # data download.
 #
 # Same proven GPU fixes/env as every other job in this project.

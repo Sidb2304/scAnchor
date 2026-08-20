@@ -30,7 +30,7 @@ def main() -> None:
 
     download_if_needed(full_path)
     build_subsample(full_path, subsample_path)
-    print(f"\nprep done -- subsample cached at {subsample_path}")
+    print(f"\nprep done, subsample cached at {subsample_path}")
 
 
 if __name__ == "__main__":

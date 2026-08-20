@@ -94,7 +94,7 @@ def test_batch_absorber_output_shape():
 
 
 def test_batch_absorber_gradient_is_not_reversed():
-    """No GRL here -- gradient on z_batch should point the normal direction
+    """No GRL here, so gradient on z_batch should point the normal direction
     (toward better batch prediction), unlike BatchDiscriminator."""
     absorber = BatchAbsorber(latent_dim=4, n_batches=2)
     z_batch = torch.randn(3, 4, requires_grad=True)

@@ -1,5 +1,5 @@
 """Vectorized (batched-over-pairs) MMD and Sinkhorn losses for the Levy
-comparison scripts -- NOT part of the shipped scanchor package, and
+comparison scripts. NOT part of the shipped scanchor package, and
 deliberately NOT a replacement for losses.py's mmd_loss/sinkhorn_ot_loss.
 
 Why this exists: losses.py's versions loop over batch-pairs in Python,
@@ -7,7 +7,7 @@ one cdist/Sinkhorn-solve at a time. That's correct and fine at
 Stephenson's 3-batch scale (what those functions were validated
 against), but at Levy's 8 batches (up to C(8,2)=28 pairs per minibatch,
 Sinkhorn needing 50 sequential iterations per pair) that's dozens of
-small, sequential GPU kernel launches per minibatch -- real evidence from
+small, sequential GPU kernel launches per minibatch; real evidence from
 run_levy_sinkhorn_comparison.py / run_levy_combined_comparison.py: ~50
 min/seed on GPU for the Sinkhorn-containing configs, vs. ~4 min/seed for
 MMD-only, at the same dataset/hardware. GPU throughput doesn't fix that
@@ -17,12 +17,12 @@ minibatch dominates regardless of how fast each individual op is.
 This module pads every active batch's per-minibatch cell subset to the
 same size and stacks all pairs into one 3D tensor, so cdist and the
 Sinkhorn dual iteration run as ONE batched op across every pair at once
-instead of 28 sequential ones -- the actual fix, not just "use more GPU".
+instead of 28 sequential ones, the actual fix, not just "use more GPU".
 
 Deliberately kept separate from losses.py rather than modifying
 mmd_loss/sinkhorn_ot_loss in place: those functions are validated (real,
 seed-checked published numbers depend on their exact behavior) and
-covered by tests/test_losses.py -- changing them, even to something
+covered by tests/test_losses.py; changing them, even to something
 numerically equivalent, risks that validated history. This module is
 verified numerically equivalent to them instead (see
 test_vectorized_batch_losses.py), then used ONLY in these Levy
@@ -40,8 +40,8 @@ def _pad_batches(embeddings: torch.Tensor, batch_ids: torch.Tensor):
       - mask: (n_batches_present, max_n) bool, True where a row is real
       - unique_batches: the actual batch id for each row of `padded`
 
-    Padded rows are zero-filled -- always masked out downstream, never
-    contribute to any sum/mean.
+    Padded rows are zero-filled and always masked out downstream, never
+    contributing to any sum/mean.
     """
     unique_batches = batch_ids.unique()
     subsets = [embeddings[batch_ids == b] for b in unique_batches]
@@ -109,8 +109,8 @@ def vectorized_sinkhorn_ot_loss(
     embeddings: torch.Tensor, batch_ids: torch.Tensor, epsilon: float = 0.1, n_iters: int = 50
 ) -> torch.Tensor:
     """Same entropic-OT math as losses.sinkhorn_ot_loss (PER-PAIR
-    median-rescaled cost -- matching the reference's independent
-    per-call rescale, not one shared median across every pair -- and the
+    median-rescaled cost, matching the reference's independent
+    per-call rescale, not one shared median across every pair, and the
     same log-space dual fixed point), batched over every pair of batches
     at once. Padded rows/cols get a large FINITE cost sentinel rather
     than literal +inf: real +inf/-inf values inside the fixed-point loop
@@ -142,7 +142,7 @@ def vectorized_sinkhorn_ot_loss(
     pair_mask = mask_a.unsqueeze(2) & mask_b.unsqueeze(1)
 
     # Per-pair median (the reference rescales EACH pair independently, via
-    # its own separate call) -- a one-time, no_grad, n_pairs-sized loop is
+    # its own separate call): a one-time, no_grad, n_pairs-sized loop is
     # cheap; it's the 50-ITERATION loop below that this whole module exists
     # to vectorize, not this.
     with torch.no_grad():

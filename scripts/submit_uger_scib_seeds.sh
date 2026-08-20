@@ -11,12 +11,12 @@
 ###############################################################################
 # Seed-robustness check for the scIB benchmark result (README's Current
 # results, v0.8.0): scAnchor beat Harmony on cell-type purity across all
-# three atlas datasets at seed 0 -- this reruns seeds 1 and 2 for each
+# three atlas datasets at seed 0; this reruns seeds 1 and 2 for each
 # dataset (seed 0 is already done, don't waste compute repeating it) to
 # check that result isn't a single-seed accident, the same rigor already
 # applied to the core MMD dose-response result. 6 array-job tasks (3
-# datasets x 2 new seeds), same cluster/environment as submit_uger_scib.sh
-# -- if that one already ran successfully, no new one-time setup needed.
+# datasets x 2 new seeds), same cluster/environment as submit_uger_scib.sh;
+# if that one already ran successfully, no new one-time setup needed.
 #
 # Writes to per-(dataset, seed) output dirs so nothing collides with the
 # existing seed=0 results already in scib_benchmark_run/{dataset}/.
@@ -54,12 +54,12 @@ mkdir -p "$DATA_CACHE_DIR" "$OUT_DIR" "$REPO_DIR/logs"
 # --- end preflight check ---
 # Note: this mkdir happens AFTER SGE has already tried to open the -o log
 # path above, so it doesn't help THIS run if logs/ was missing at qsub
-# time -- it's just defensive for next time. logs/ must already exist
+# time; it's just defensive for next time. logs/ must already exist
 # in $REPO_DIR before you run qsub.
 
 # Same conda-activation approach as submit_uger_scib.sh (batch jobs don't
 # inherit the interactive login shell's `use`/.bashrc setup that makes
-# `conda` resolve on PATH) -- see that script's comments for why.
+# `conda` resolve on PATH); see that script's comments for why.
 CONDA_SH=""
 for conda_base in \
     "/broad/software/free/Linux/redhat_7_x86_64/pkgs/anaconda3_2022.10" \
@@ -71,7 +71,7 @@ do
     fi
 done
 if [[ -z "$CONDA_SH" ]]; then
-    echo "ERROR: couldn't find conda.sh -- see submit_uger_scib.sh's comments for how to fix." >&2
+    echo "ERROR: couldn't find conda.sh; see submit_uger_scib.sh's comments for how to fix." >&2
     exit 1
 fi
 source "$CONDA_SH"
@@ -89,6 +89,6 @@ echo "Finished task ${SGE_TASK_ID} (${DATASET}, seed=${SEED}): $(date)"
 
 # Dataset already cached from the earlier seed=0 run (DATA_CACHE_DIR is
 # shared across all tasks/seeds), so this should skip straight to embedding
-# extraction -- same per-dataset timing as before (~2.3-4.7hr on CPU),
+# extraction, with the same per-dataset timing as before (~2.3-4.7hr on CPU),
 # unaffected by which seed is used.
 ###############################################################################

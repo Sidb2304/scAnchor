@@ -1,5 +1,5 @@
 """Run scAnchor + a Harmony baseline on one scIB atlas-level integration
-benchmark dataset (immune, pancreas, or lung) -- the standard reference
+benchmark dataset (immune, pancreas, or lung), the standard reference
 point every batch-correction method gets compared against, not yet run in
 this project (see README's Reference panel section).
 
@@ -8,7 +8,7 @@ on first run (cached after), device is auto-detected (GPU if visible, CPU
 otherwise). No behavior difference between the two beyond speed.
 
 These datasets don't carry a donor/individual identity at all (unlike
-Levy/Jerber) -- donor_col is left out of the config entirely, so
+Levy/Jerber), so donor_col is left out of the config entirely, and
 donor_consistency_loss correctly stays inert, and only the leave-one-batch-out
 protocol (batch-mixing purity, cell-type kNN purity) applies, not the
 same-donor-across-batch replicate test.
@@ -41,7 +41,7 @@ from scanchor.train import train
 RNG_SEED = 0
 
 # URLs and obs-column names resolved from the Figshare API directly
-# (api.figshare.com/v2/articles/12420968) -- batch/celltype column names
+# (api.figshare.com/v2/articles/12420968); batch/celltype column names
 # come from the scIB paper's own preprocessing convention for each dataset,
 # not verified by actually loading these files locally. The runtime check
 # in main() fails loudly with the real available columns if any of these
@@ -105,7 +105,7 @@ def build_config(ref_path: Path, held_out_path: Path, out_dir: Path, embed_dim: 
             "variance_weight": 1.0,
             "donor_weight": 1.0,
             # Current shipped default (README's Current results): MMD alone,
-            # not the adversarial discriminator -- a real, seed-checked
+            # not the adversarial discriminator, since a real, seed-checked
             # sweep found the discriminator regresses batch-mixing.
             "adversarial_weight": 0.0,
             "absorption_weight": 0.0,
@@ -154,7 +154,7 @@ def main() -> None:
         if col not in adata.obs.columns:
             raise ValueError(
                 f"[{args.dataset}] expected {col_key}={col!r} not found in obs. "
-                f"Available columns: {list(adata.obs.columns)} -- fix DATASETS[{args.dataset!r}] "
+                f"Available columns: {list(adata.obs.columns)}; fix DATASETS[{args.dataset!r}] "
                 f"in this script and re-run."
             )
 
@@ -164,7 +164,7 @@ def main() -> None:
     adata.obs["cell_type"] = adata.obs[spec["celltype_col"]].astype(str)
 
     # scIB benchmark files aren't uniformly raw counts (some ship pre-
-    # normalized) and there's no donor/individual identity at all here --
+    # normalized) and there's no donor/individual identity at all here, so
     # total_counts/pct_counts_mt are computed fresh from whatever's in .X
     # for the continuous covariates scAnchor expects; donor_col is omitted
     # from build_config entirely above, so donor_consistency_loss correctly

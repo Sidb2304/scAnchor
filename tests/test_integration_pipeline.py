@@ -1,6 +1,6 @@
 """End-to-end integration test: train() through both evaluate protocols on
 synthetic data. The other tests in this directory each cover one piece in
-isolation (losses, model, single-call train()) -- this one checks the whole
+isolation (losses, model, single-call train()); this one checks the whole
 pipeline a real user actually runs (train -> leave-one-batch-out ->
 same-donor-across-batch) doesn't break when wired together, using the exact
 public entry points (train(), leave_one_batch_out.run(),
@@ -16,8 +16,9 @@ from scanchor.train import train
 
 def _write_dataset(path, batches, n_donors=4, cells_per_donor_per_batch=5, embed_dim=8, seed=0):
     """Donors crossed across every listed batch, so donor_consistency_loss
-    has real cross-batch pairs to learn from -- mirrors the real reference
-    panels this project trains on (Levy, scIB tasks), not a degenerate case.
+    has real cross-batch pairs to learn from, which mirrors the real
+    reference panels this project trains on (Levy, scIB tasks), not a
+    degenerate case.
     """
     rng = np.random.default_rng(seed)
     donors = [f"d{i}" for i in range(n_donors)]
@@ -81,7 +82,7 @@ def test_train_then_leave_one_batch_out_and_replicate_test(tmp_path):
     checkpoint_out = tmp_path / "head.pt"
 
     _write_dataset(ref_path, batches=["b1", "b2"])
-    # A batch never seen during training -- the actual inductive-
+    # A batch never seen during training: the actual inductive-
     # generalization claim under test, same setup as the real benchmark
     # scripts (run_stephenson_benchmark.py, run_scib_benchmark.py).
     _write_dataset(held_out_path, batches=["b3"], seed=1)

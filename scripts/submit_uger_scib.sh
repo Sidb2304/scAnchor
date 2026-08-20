@@ -11,7 +11,7 @@
 # -l gpu=1                    # <-- UNVERIFIED for this cluster, see note below
 ###############################################################################
 # Run scAnchor + a Harmony baseline on all three scIB atlas-level integration
-# benchmark datasets (pancreas, lung, immune) -- the standard reference point
+# benchmark datasets (pancreas, lung, immune), the standard reference point
 # every batch-correction method gets compared against, not yet run in this
 # project (see README's Reference panel section). One array-job task per
 # dataset (SGE_TASK_ID 1/2/3 -> pancreas/lung/immune below), so all three run
@@ -23,20 +23,20 @@
 # path doesn't exist rather than failing confusingly mid-job.
 #
 # Datasets are downloaded fresh from Figshare on first run (cached in
-# DATA_CACHE_DIR after) -- requires the compute nodes to have internet
+# DATA_CACHE_DIR after), which requires the compute nodes to have internet
 # egress. Some clusters only allow that from login nodes; if a task fails
-# immediately with a download/connection error, that's almost certainly why
-# -- pre-download the 3 files on a login node into DATA_CACHE_DIR instead
+# immediately with a download/connection error, that's almost certainly why,
+# so pre-download the 3 files on a login node into DATA_CACHE_DIR instead
 # (exact URLs are in scripts/run_scib_benchmark.py's DATASETS dict) and
 # re-submit.
 #
-# GPU: same caveat as submit_uger.sh -- no existing script in this lab's
+# GPU: same caveat as submit_uger.sh, since no existing script in this lab's
 # history requests one, so the exact UGER GPU queue/flag for this cluster is
 # unverified. The Python side auto-detects CUDA either way, so without a
-# working GPU flag this just runs on CPU (slower, not wrong) -- see the
+# working GPU flag this just runs on CPU (slower, not wrong); see the
 # timing estimate at the bottom for what that costs.
 #
-# One-time setup (same conda env as submit_uger.sh -- reuse it if you
+# One-time setup (same conda env as submit_uger.sh, reuse it if you
 # already ran that script, this doesn't need anything extra installed
 # beyond the "baselines" extra for Harmony):
 #
@@ -78,12 +78,12 @@ mkdir -p "$DATA_CACHE_DIR" "$OUT_DIR" "$REPO_DIR/logs"
 # --- end preflight check ---
 # Note: this mkdir happens AFTER SGE has already tried to open the -o log
 # path above, so it doesn't help THIS run if logs/ was missing at qsub
-# time -- it's just defensive for next time. logs/ must already exist
+# time; it's just defensive for next time. logs/ must already exist
 # in $REPO_DIR before you run qsub.
 
 # Batch jobs don't inherit the interactive login shell's setup (the
 # `use`/`.bashrc` machinery that makes `conda` resolve on PATH when you're
-# typed in manually) -- `conda info --base` fails silently here because
+# typed in manually), since `conda info --base` fails silently here because
 # `conda` itself isn't found yet, a real bug hit running this for real.
 # Known-good path for this cluster's base anaconda install (confirmed from
 # an interactive session, see conda_base candidates below); falls back to
@@ -101,7 +101,7 @@ do
     fi
 done
 if [[ -z "$CONDA_SH" ]]; then
-    echo "ERROR: couldn't find conda.sh -- tried the hardcoded cluster path and" >&2
+    echo "ERROR: couldn't find conda.sh; tried the hardcoded cluster path and" >&2
     echo "'conda info --base'. Run 'which conda' and 'conda info --base' in an" >&2
     echo "interactive session on this cluster, then hardcode the correct" >&2
     echo "etc/profile.d/conda.sh path into the conda_base list above." >&2
@@ -122,7 +122,7 @@ echo "Finished task ${SGE_TASK_ID} (${DATASET}): $(date)"
 # Rough timing estimate from local (Mac CPU) testing on a similar-scale
 # dataset (Jerber day-30, ~9.5k cells): ~118 cells/min for scGPT embedding
 # extraction alone. Approximate cell counts for these three, from the scIB
-# paper (NOT verified by actually loading these files -- exact counts print
+# paper (NOT verified by actually loading these files; exact counts print
 # at runtime above): pancreas ~16.4k cells (~2.3hr), lung ~32.5k cells
 # (~4.6hr), immune ~33.5k cells (~4.7hr). h_rt=8:00:00 above gives headroom
 # for the slowest of the three; adjust if your cluster's CPUs are

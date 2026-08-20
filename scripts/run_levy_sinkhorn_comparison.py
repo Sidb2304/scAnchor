@@ -1,42 +1,42 @@
 """Real replicate-structure test for Sinkhorn OT (v1.3.0's sinkhorn_weight)
 against the shipped mmd_weight=20 default, on the actual private Levy
-astrocyte mini-village dataset -- the third validation axis (after the
-single-dataset seed-check and Geneformer cross-backbone check, both
+astrocyte mini-village dataset. This is the third validation axis (after
+the single-dataset seed-check and Geneformer cross-backbone check, both
 already real/positive) that MMD's default status was originally earned on
 but Sinkhorn hadn't been checked against yet (see README's Current
 results / Status).
 
 Reuses ALREADY-CACHED real scGPT embeddings (levy_run/{reference,heldout}.h5ad,
-extracted via submit_uger_levy_full_dataset.sh's GPU job) -- this script
-itself needs no GPU, training a small correction head on frozen embeddings
-is cheap on CPU.
+extracted via submit_uger_levy_full_dataset.sh's GPU job); this script
+itself needs no GPU, since training a small correction head on frozen
+embeddings is cheap on CPU.
 
 Purity metrics (batch_mixing_purity, label_knn_purity) are evaluated on a
 20k-cell random SUBSAMPLE of the combined reference+held-out set, not the
 full ~81k cells: both metrics use sklearn NearestNeighbors, which falls
 back to brute-force distance computation for 512-dim embeddings (tree
-methods don't help past ~20-30 dims) -- an O(n^2) cost that, run 4 times
+methods don't help past ~20-30 dims), an O(n^2) cost that, run 4 times
 (before/after x 2 metrics) on the full ~81k cells, was real enough to risk
 exceeding a 6-hour cluster walltime request. This is the first dataset in
 this project's history run at Levy's true full scale (every prior dataset
 topped out around 19-21k cells), so this scalability wall was never hit
-before. donor_retrieval_accuracy is NOT subsampled -- it operates on
+before. donor_retrieval_accuracy is NOT subsampled: it operates on
 (donor, batch) centroids (at most 8x9=72 of them here), independent of
 cell count, so it's cheap regardless of scale.
 
 Training deliberately does NOT call the shared `correction_loss` wrapper.
 That function always computes mmd_loss, class_conditional_mmd_loss, AND
-sinkhorn_ot_loss every step regardless of their weight (by design -- its
+sinkhorn_ot_loss every step regardless of their weight (by design: its
 metrics dict is meant to report each term's real value even when unused,
 see tests/test_losses.py). At Stephenson's 3-batch scale that's cheap and
 never mattered; at Levy's real 8-batch x 14-cell-type scale, that's up to
 C(8,2)=28 batch-pairs x 14 cell-types = 392 pairwise kernel/Sinkhorn
 computations per minibatch for terms whose weight is 0 in every run here
 (conditional_mmd always, plus whichever of mmd/sinkhorn isn't this run's
-active mechanism) -- a first, real attempt at this exact comparison on
+active mechanism); a first, real attempt at this exact comparison on
 Stephenson-scale local CPU never finished even one seed in ~15 minutes CPU
-time. Composing the loss by hand here -- calling only the individual
-(already public, tested) functions actually needed -- is 100%
+time. Composing the loss by hand here, calling only the individual
+(already public, tested) functions actually needed, is 100%
 behavior-preserving: a term multiplied by weight=0 contributes exactly 0
 to `total` either way, so skipping its computation changes nothing about
 the trained model or its evaluation numbers, only the wall-clock cost.
@@ -76,7 +76,7 @@ EMBED_DIM = 512
 EPOCHS = 30
 SEEDS = (0, 1, 2)
 EVAL_SUBSAMPLE_N = 20_000
-EVAL_SUBSAMPLE_SEED = 0  # fixed across all runs -- same eval cells for every config/seed, a fair comparison
+EVAL_SUBSAMPLE_SEED = 0  # fixed across all runs: same eval cells for every config/seed, a fair comparison
 
 MECHANISMS = {
     "mmd20": {"kind": "mmd", "weight": 20.0},
@@ -98,7 +98,7 @@ def run_one(mechanism, seed, reference, held_out, vocab, device):
         cat_embed_dim=8, covariate_dim=32, hidden_dim=128, max_delta_ratio=1.0,
     ).to(device)
     # BatchAbsorber deliberately not built at all: absorption_weight=0.0 in
-    # every run here, so its output was never used -- see module docstring.
+    # every run here, so its output was never used (see module docstring).
     optimizer = torch.optim.Adam(head.parameters(), lr=1e-3)
 
     t0 = time.time()
@@ -112,7 +112,7 @@ def run_one(mechanism, seed, reference, held_out, vocab, device):
             donor_code = donor_code.to(device)
             corrected = head(embedding, categorical, continuous)
 
-            # Hand-composed loss -- see module docstring for why this doesn't call
+            # Hand-composed loss; see module docstring for why this doesn't call
             # the shared correction_loss wrapper. Only computes the ONE active
             # mechanism's batch-mixing term, and skips class_conditional_mmd_loss
             # entirely (always 0-weighted in both configs tested here).

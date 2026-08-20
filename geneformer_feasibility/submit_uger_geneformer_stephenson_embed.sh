@@ -8,13 +8,13 @@
 #$ -l gpu=1
 #$ -l operating_system=RedHat8
 ###############################################################################
-# Real-scale Geneformer embedding extraction (21,000 cells) -- same env
+# Real-scale Geneformer embedding extraction (21,000 cells), same env
 # setup as submit_uger_geneformer_smoketest.sh (which already resolved
 # every dependency/GPU/OS issue for this exact package on this exact
 # cluster), pointed at the real embedding script instead of the smoke test.
 #
 # Reuses geneformer_smoketest_env if it still exists, otherwise rebuilds
-# it fresh (it was deleted once already to free disk quota -- see
+# it fresh (it was deleted once already to free disk quota; see
 # feedback_use_gpu_nodes.md memory note for the full list of fixes below).
 #
 # Submit from the repo root:
@@ -28,7 +28,7 @@ FEASIBILITY_DIR="${REPO_DIR}/geneformer_feasibility"
 # Explicit path on the lab's shared storage, NOT `-n` (which defaults to
 # ~/.conda/envs/, subject to a hard 20GB home-directory quota that this
 # exact job hit three times in a row, even after cleanup). The working
-# `scanchor` env already lives this way for the same reason -- should
+# `scanchor` env already lives this way for the same reason; should
 # have matched that pattern from the start instead of using -n.
 ENV_PATH="/stanley/nehme_lab/Siddharth/conda_envs/geneformer_stephenson_env"
 
@@ -65,17 +65,17 @@ echo "Starting Geneformer Stephenson embedding: $(date)"
 export CFLAGS="-std=gnu99"
 export CXXFLAGS="-std=c++11"
 
-# Latest torch via the cu124 index, NOT pinned to 2.3.1/cu121 -- that
+# Latest torch via the cu124 index, NOT pinned to 2.3.1/cu121: that
 # pin was copied by mistake from the sciplex script, which needed it for
 # scgpt's torchtext ABI compatibility. Geneformer doesn't use torchtext
 # at all, and its own deps (bitsandbytes, peft) need a MODERN torch
-# (torch.library.register_fake only exists in torch>=2.4) -- confirmed
+# (torch.library.register_fake only exists in torch>=2.4), confirmed
 # directly via "AttributeError: module 'torch.library' has no attribute
 # 'register_fake'" when 2.3.1 was pinned.
 #
 # No --no-deps: this env has residual nvidia-cu12-* libraries pinned to
 # versions matching the OLD torch==2.3.1/cu121 install from earlier
-# attempts -- forcing just the top-level torch package back to
+# attempts, so forcing just the top-level torch package back to
 # latest/cu124 without letting its CUDA library deps update too would
 # risk the exact same kind of library-version mismatch just fixed above,
 # just in the other direction. Let pip reinstall the whole matched set.

@@ -4,7 +4,7 @@ evaluation protocols.
 
 Cluster-ready: takes data/checkpoint paths as CLI args instead of hardcoding
 them, uses the installed scanchor package (pip install -e ".[scgpt]"), and
-device is auto-detected -- GPU if visible, CPU otherwise. No behavior
+device is auto-detected: GPU if visible, CPU otherwise. No behavior
 difference between the two beyond speed.
 
 Example (full dataset, no subsampling):
@@ -15,7 +15,7 @@ Example (full dataset, no subsampling):
         --out-dir /path/to/scratch/scanchor_full_run \
         --per-group-n 0
 
---per-group-n 0 means "use every cell in every (batch, donor) group" --
+--per-group-n 0 means "use every cell in every (batch, donor) group",
 i.e. the full dataset, not a subsample. Set it to a positive integer to cap
 cells per group (what every experiment so far in this repo's history used).
 """

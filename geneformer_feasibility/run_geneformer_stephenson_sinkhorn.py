@@ -7,11 +7,11 @@ published scGPT result and the Geneformer/MMD cross-backbone result
 
 Reuses run_geneformer_stephenson_benchmark.py's exact data-building logic
 (same CSV, same held-out-site selection) so the cells compared are
-identical to that already-published Geneformer/MMD result -- only the
+identical to that already-published Geneformer/MMD result; only the
 loss mechanism (sinkhorn_weight=0.5, mmd_weight=0.0) differs.
 
 Reuses scAnchor's own train()/evaluate modules directly (this is
-scAnchor's own repo) -- not the PyPI package, the local src/.
+scAnchor's own repo); not the PyPI package, the local src/.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def build_config(ref_path, held_out_path, out_dir, seed=RNG_SEED):
             "donor_weight": 1.0,
             "adversarial_weight": 0.0,
             "absorption_weight": 0.0,
-            # The mechanism under test here -- mmd_weight OFF, sinkhorn_weight
+            # The mechanism under test here: mmd_weight OFF, sinkhorn_weight
             # at the value found in the architecture experiment (README's
             # Current results) to beat published MMD on both axes at once on
             # the scGPT backbone.

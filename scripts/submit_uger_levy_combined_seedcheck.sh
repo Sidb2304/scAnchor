@@ -11,12 +11,12 @@
 # Seed-checks the two most promising combined mmd_weight+sinkhorn_weight
 # points found by run_levy_combined_comparison.py's single-seed sweep,
 # using scripts/_vectorized_batch_losses.py instead of losses.py's
-# sequential-per-pair mmd_loss/sinkhorn_ot_loss -- numerically verified
+# sequential-per-pair mmd_loss/sinkhorn_ot_loss, numerically verified
 # equivalent (9/9 checks incl. gradcheck), batches every batch-pair into
 # one op instead of looping over up to 28 pairs sequentially. A local
 # 2-epoch CPU smoke test of the full training loop ran in ~13s/epoch with
 # no errors, extrapolating to well under the ~50 min/seed the sequential
-# version took on GPU for a comparable config -- real evidence this fix
+# version took on GPU for a comparable config; real evidence this fix
 # works, not just the isolated numerical-equivalence checks.
 #
 # Same proven GPU fixes/env as every other job in this project.

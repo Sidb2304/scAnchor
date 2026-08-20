@@ -7,7 +7,7 @@ points from run_levy_combined_comparison.py's single-seed sweep:
     beating both individual mechanisms.
 
 Uses scripts/_vectorized_batch_losses.py instead of losses.py's
-mmd_loss/sinkhorn_ot_loss -- numerically verified equivalent (see
+mmd_loss/sinkhorn_ot_loss, numerically verified equivalent (see
 /private/tmp/.../verify_vectorized_batch_losses.py's 9/9 pass, including
 gradcheck), but batches every pair of batches into one op instead of
 looping sequentially. run_levy_combined_comparison.py's single-seed sweep

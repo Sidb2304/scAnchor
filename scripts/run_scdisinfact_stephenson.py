@@ -3,10 +3,10 @@ used by run_stephenson_benchmark.py, for a genuine same-dataset three-way
 comparison against scAnchor and Harmony.
 
 scDisInFact (https://github.com/ZhangLabGT/scDisInFact) is a conditional VAE
-that disentangles an explicit *condition* variable (here: Status --
-Covid/Healthy/LPS/Non_covid) from batch effects (here: Site) -- unlike
-Harmony/scVI, its whole design assumes an independent condition axis, which
-is exactly why this dataset (not Levy/Jerber/scIB) was chosen for it. It
+that disentangles an explicit *condition* variable (here: Status, taking
+values Covid/Healthy/LPS/Non_covid) from batch effects (here: Site).
+Unlike Harmony/scVI, its whole design assumes an independent condition axis,
+which is exactly why this dataset (not Levy/Jerber/scIB) was chosen for it. It
 operates on raw/normalized counts via its own generative model, not a
 post-hoc correction of a frozen embedding, so this script doesn't touch
 scGPT at all and can run independently of (in parallel with) the scGPT
@@ -42,7 +42,7 @@ from scanchor.evaluate.metrics import batch_mixing_purity, label_knn_purity  # n
 RNG_SEED = 0
 NEPOCHS = 50  # scDisInFact's own default; their demo README uses 100 on GPU,
               # halved here as a starting point given CPU-only timing is
-              # unknown for this dataset size -- see printed epoch timing
+              # unknown for this dataset size; see printed epoch timing
 
 
 def main() -> None:
@@ -60,7 +60,7 @@ def main() -> None:
     subsample_path = args.data_cache_dir / "stephenson_subsample.h5ad"
     download_if_needed(full_path)
     # Shared subsampling logic (same seed, same code path) as
-    # run_stephenson_benchmark.py -- if that script already ran, this reuses
+    # run_stephenson_benchmark.py; if that script already ran, this reuses
     # its cached subsample.h5ad instead of rebuilding it, guaranteeing both
     # methods are compared on identical cells.
     sub = build_subsample(full_path, subsample_path)

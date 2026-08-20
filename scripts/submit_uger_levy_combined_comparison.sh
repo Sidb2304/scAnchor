@@ -11,18 +11,18 @@
 # Does combining mmd_weight + sinkhorn_weight in one correction head beat
 # either mechanism alone on Levy? Motivated by run_levy_sinkhorn_comparison.py's
 # real result: MMD and Sinkhorn have complementary weaknesses there (MMD
-# weak on donor retrieval/cell-type purity, Sinkhorn weak on batch-mixing)
-# -- real evidence worth testing directly, not assuming.
+# weak on donor retrieval/cell-type purity, Sinkhorn weak on batch-mixing),
+# real evidence worth testing directly, not assuming.
 #
 # 6 single-seed runs, most including the expensive Sinkhorn term (its
 # 50-iteration-per-batch-pair solve dominates cost regardless of whether
-# MMD is also active) -- h_rt=8:00:00 gives real headroom given
+# MMD is also active), so h_rt=8:00:00 gives real headroom given
 # run_levy_sinkhorn_comparison.py's sinkhorn-only runs took ~50 min/seed.
 #
 # Same two proven GPU fixes as every other job in this project (gpu=1,
 # operating_system=RedHat8) and reuses the already-working scanchor env
 # (CUDA torch already installed from the last two Levy jobs, persists on
-# shared storage -- no reinstall needed).
+# shared storage, so no reinstall needed).
 #
 # Submit from the repo root: qsub scripts/submit_uger_levy_combined_comparison.sh
 ###############################################################################
